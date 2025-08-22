@@ -25,7 +25,7 @@ high_cutoff_filter = 0.0 # High cutoff frequency for bandpass filter (Hz)
 notch_filter = 0.0 # Frequncy for notch filter to handle powerline noise (Hz)
 sample_rate = 0 # EEG sampling frequency (Hz)
 preictal_minutes = 0 # Duration of preictal window seizure onset (minutes)
-epoch_window_duration_seconds = # Window length for splitting data into epochs (seconds)
+epoch_window_duration_seconds = 0 # Window length for splitting data into epochs (seconds)
 selected_channels = [] # List of EEG channels to include
 ```
 
