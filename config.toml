@@ -1,7 +1,11 @@
-[preprocessing]
+[data]
 dataset_path = "./dataset"
 specs_output_path = "./specs"
+
+[dataset]
 number_of_patients = 1
+
+[preprocessing]
 low_cutoff_filter = 0.5
 high_cutoff_filter = 40.0
 notch_filter = 60.0
