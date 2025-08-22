@@ -34,6 +34,7 @@ selected_channels = [] # List of EEG channels to include
 Link of the EEG recordings: [EEG Recordings](https://drive.google.com/drive/folders/11brbsKB-k09mx-Bo4cyUK2dyVe9vvqe-?usp=drive_link)
 
 > [!NOTE]
+> Download the 'dataset' folder in the link.
 > Once downloaded and extracted, place it in the root directory (outside of the src folder)
 
 ## Running the Code
