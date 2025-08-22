@@ -29,9 +29,12 @@ epoch_window_duration_seconds = 0 # Window length for splitting data into epochs
 selected_channels = [] # List of EEG channels to include
 ```
 
-## Getting the data
+## Dataset
 
-By default, a sample dataset will be in the repository that would consist of a single patient's EEG recordings.
+Link of the EEG recordings: [EEG Recordings](https://drive.google.com/drive/folders/11brbsKB-k09mx-Bo4cyUK2dyVe9vvqe-?usp=drive_link)
+
+> [!NOTE]
+> Once downloaded and extracted, place it in the root directory (outside of the src folder)
 
 ## Running the Code
 
