@@ -1,0 +1,30 @@
+[preprocessing]
+dataset_path = "./dataset"
+specs_output_path = "./specs"
+number_of_patients = 1
+low_cutoff_filter = 0.5
+high_cutoff_filter = 40.0
+notch_filter = 60.0
+sample_rate = 256
+preictal_minutes = 30
+epoch_window_duration_seconds = 30
+selected_channels = [
+    "FP1-F7",
+    "F7-T7",
+    "T7-P7",
+    "P7-O1",
+    "FP1-F3",
+    "F3-C3",
+    "C3-P3",
+    "P3-O1",
+    "FP2-F4",
+    "F4-C4",
+    "C4-P4",
+    "P4-O2",
+    "FP2-F8",
+    "F8-T8",
+    "T8-P8-0",
+    "P8-O2",
+    "FZ-CZ",
+    "CZ-PZ",
+]

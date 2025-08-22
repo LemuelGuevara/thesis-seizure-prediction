@@ -1,0 +1,12 @@
+name: seizure-prediction
+channels:
+  - conda-forge
+dependencies:
+  - mne
+  - numpy
+  - matplotlib
+  - scikit-learn
+  - scipy
+  - toml
+  - tqdm
+  - prettytable
