@@ -7,7 +7,6 @@ from datetime import timedelta
 from itertools import chain
 from typing import Literal, Optional
 
-import matplotlib.pyplot as plt
 import mne
 import numpy as np
 from mne.io import BaseRaw
@@ -298,16 +297,10 @@ def normalize_stft(stft_matrix: np.ndarray) -> np.ndarray:
 
     # Normalize to 0–1
     min_max_scaler = p.MinMaxScaler()
-    stft_norm_matrix = min_max_scaler.fit_transform(stft_matrix)
-
-    # Apply colormap (magma)
-    cmap = plt.get_cmap("magma")
-    # type: ignore
-    img_rgb = cmap(stft_norm_matrix)[:, :, :3]  # drop alpha channel
-    img_rgb = (img_rgb * 255).astype(np.uint8)  # type: ignore
+    stft_norm_matrix: np.ndarray = min_max_scaler.fit_transform(stft_matrix)
 
     # Convert to PIL Image and resize
-    img = Image.fromarray(img_rgb)
+    img = Image.fromarray(stft_norm_matrix, mode="RGB")
     img = img.resize((224, 224), resample=Image.Resampling.BICUBIC)
 
     return np.array(img)  # shape (224,224,3)
