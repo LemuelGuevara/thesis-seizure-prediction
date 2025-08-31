@@ -217,7 +217,7 @@ def compute_stft_from_data(
     Returns:
         tuple[np.ndarray, np.ndarray, np.ndarray]:
             - frequency_bins: Array of frequency values (in Hz) corresponding to the rows of the STFT.
-            - times: Array of time points (in seconds) corresponding to the columnsof the STFT.
+            - times: Array of time points (in seconds) corresponding to the columns of the STFT.
             - stft_matrix: 2D complex-valued STFT result, where each element represents the magnitude
             and phase of a specific frequency at a specific time.
     """
