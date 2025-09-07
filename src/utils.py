@@ -1,6 +1,8 @@
-import logging
+"""
+Functions that can be resued as utility to other modules.
+"""
+
 import os
-import sys
 from datetime import datetime, timedelta
 
 import toml
@@ -59,29 +61,5 @@ def load_patient_summary(patient_id: str, dataset_path: str):
     )
 
 
-def setup_logger(name: str, level: int = logging.INFO) -> logging.Logger:
-    """
-    Reusable logger setup.
-
-    Args:
-        name(str): Name of the logger.
-        level(int): Logging level (e.g. logging.DEBUG)
-    """
-
-    logger = logging.getLogger(name)
-    logger.setLevel(level)
-
-    for handler in logger.handlers[:]:
-        logger.removeHandler(handler)
-
-    stream_handler = logging.StreamHandler(sys.stdout)
-    stream_handler.setLevel(level)
-
-    formatter = logging.Formatter(
-        fmt="%(asctime)s | %(name)s | [%(levelname)s] %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-    stream_handler.setFormatter(formatter)
-
-    logger.addHandler(stream_handler)
-    return logger
+def is_precomputed_data_exists(data_path: str) -> bool:
+    return os.path.exists(data_path) and len(os.listdir(data_path)) > 0

@@ -1,64 +1,52 @@
-import logging
+"""
+Data Cleaning Module
+
+This module provides functions for cleaning the EEG recordings before
+passing them to time-frequency and bispectrum processing.
+
+"""
+
 import os
 import sys
 import typing
-from dataclasses import dataclass
 from datetime import timedelta
-from itertools import chain
-from typing import Literal, Optional
+from typing import cast
 
 import mne
-import numpy as np
 from mne.io import BaseRaw
-from numpy._typing._array_like import NDArray
-from PIL import Image
-from prettytable import PrettyTable
-from scipy.signal import stft
-from sklearn import preprocessing as p
 from tqdm import tqdm
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/../")
 
-from config import (
+from src.config import (
     DATASET_PATH,
     EPOCH_WINDOW_DURATION_SECONDS,
+    HIGH_CUTOFF_FILTER,
+    LOW_CUTOFF_FILTER,
+    NOTCH_FILTER,
     PREICTAL_MINUTES,
     SELECTED_CHANNELS,
-    LOW_CUTOFF_FILTER,
-    HIGH_CUTOFF_FILTER,
-    NOTCH_FILTER,
 )
-from utils import load_patient_summary, parse_time_str, setup_logger
+from src.datatypes import EpochInterval
+from src.logger import setup_logger
+from src.utils import parse_time_str
 
 mne.set_log_level("ERROR")
+
+logger = setup_logger(name="data_cleaning")
 
 # Counter for Spectrogram windows
 preictal_windows_count: int = 0
 interictal_windows_count: int = 0
 
-@dataclass
-class SeizureInterval:
-    phase: Literal["preictal", "interictal", "ictal"]
-    start: int
-    end: int
-    duration: Optional[int] = None
-    windows_created: Optional[int] = None
 
-
-@dataclass
-class CombinedIntervals:
-    preictal_intervals: list[SeizureInterval]
-    interictal_intervals: list[SeizureInterval]
-    ictal_intervals: list[SeizureInterval]
-
-
-# Extracts seizure intervals from a patient summary text file.
-# Necessary conversions since there are two time formats (seconds and datetime)
 def extract_seizure_intervals(
     patient_summary: typing.TextIO,
-) -> tuple[list[SeizureInterval], list[SeizureInterval], list[SeizureInterval]]:
+) -> tuple[list[EpochInterval], list[EpochInterval], list[EpochInterval]]:
     """
     Extracts seizure intervals from a patient summart text file.
+
+    Necessary conversions since there are two time formats (seconds and datetime).
 
     Args:
         patient_summary (TextIO): Patient summary.txt file.
@@ -70,11 +58,9 @@ def extract_seizure_intervals(
             - ictal_intervals: Actual seizure intervals.
     """
 
-    logger = setup_logger(name="extract_seizure_intervals", level=logging.DEBUG)
-
-    preictal_intervals: list[SeizureInterval] = []
-    interictal_intervals: list[SeizureInterval] = []
-    ictal_intervals: list[SeizureInterval] = []
+    preictal_intervals: list[EpochInterval] = []
+    interictal_intervals: list[EpochInterval] = []
+    ictal_intervals: list[EpochInterval] = []
 
     pending_seizure_start = None
     file_start = None
@@ -98,7 +84,7 @@ def extract_seizure_intervals(
             end_sec = int(float(line.split(":", 1)[1].strip().split()[0]))
             if pending_seizure_start is not None:
                 ictal_intervals.append(
-                    SeizureInterval(
+                    EpochInterval(
                         phase="ictal", start=pending_seizure_start, end=end_sec
                     )
                 )
@@ -131,7 +117,7 @@ def extract_seizure_intervals(
         # Interictal before preictal
         if preictal_start_time > current_start:
             interictal_intervals.append(
-                SeizureInterval(
+                EpochInterval(
                     phase="interictal",
                     start=int((current_start - file_start).total_seconds()),
                     end=int((preictal_start_time - file_start).total_seconds()),
@@ -139,7 +125,7 @@ def extract_seizure_intervals(
             )
 
         preictal_intervals.append(
-            SeizureInterval(
+            EpochInterval(
                 phase="preictal",
                 start=int((preictal_start_time - file_start).total_seconds()),
                 end=int((seizure_start_time - file_start).total_seconds()),
@@ -151,7 +137,7 @@ def extract_seizure_intervals(
     # Interictal after last seizure
     if file_end is not None and current_start < file_end:
         interictal_intervals.append(
-            SeizureInterval(
+            EpochInterval(
                 phase="interictal",
                 start=int((current_start - file_start).total_seconds()),
                 end=int((file_end - file_start).total_seconds()),
@@ -177,21 +163,22 @@ def load_raw_recordings(patient_id: str) -> list[BaseRaw]:
         list[BaseRaw]: List of unprocessed raw recordings.
     """
 
-    logger = setup_logger(name="load_raw_recordings", level=logging.DEBUG)
-    logger.debug(f"Loading EDF files for patient {patient_id}")
+    logger.info(f"Loading EDF files for patient {patient_id}")
 
     patient_folder = os.path.join(DATASET_PATH, f"chb{patient_id}")
     raw_edf_list: list[BaseRaw] = []
 
     for root, dirs, files in os.walk(patient_folder):
+        files = [f for f in files if f.lower().endswith(".edf")]
         files.sort()
-        for file in files:
-            if file.lower().endswith(".edf"):
-                recording_path = os.path.join(root, file)
-                logger.debug(f"Reading file: {file}")
-                raw_edf = mne.io.read_raw_edf(recording_path, preload=True, verbose="error")
-                raw_edf.pick(SELECTED_CHANNELS)  # only keep channels defined in config
-                raw_edf_list.append(raw_edf)
+
+        for file in tqdm(files, desc=f"Reading EDF files in {os.path.basename(root)}"):
+            recording_path = os.path.join(root, file)
+            logger.debug(f"Reading file: {file}")
+
+            raw_edf = mne.io.read_raw_edf(recording_path, preload=True, verbose="error")
+            raw_edf.pick(SELECTED_CHANNELS)  # only keep channels defined in config
+            raw_edf_list.append(raw_edf)
 
     if not raw_edf_list:
         raise FileNotFoundError(f"No EDF files found in {patient_folder}")
@@ -202,9 +189,6 @@ def load_raw_recordings(patient_id: str) -> list[BaseRaw]:
 # 2. Preprocessing: Filtering
 def apply_filters(
     raw: BaseRaw,
-    l_freq=LOW_CUTOFF_FILTER,
-    h_freq=HIGH_CUTOFF_FILTER,
-    notch_freq=NOTCH_FILTER
 ) -> BaseRaw:
     """
     Applies bandpass and notch filtering to EEG recording.
@@ -215,24 +199,22 @@ def apply_filters(
     Returns:
         BaseRaw: Filtered EEG recording.
     """
-    logger = setup_logger(name="apply_filters", level=logging.DEBUG)
-    logger.debug("Applying bandpass and notch filters")
 
-    #bandpass filtering
-    raw.filter(l_freq, h_freq)
-    logger.debug(f"Bandpass filtered: {l_freq} - {h_freq} Hz")
+    logger.info("Applying bandpass and notch filters")
 
-    #notch filtering
-    raw.notch_filter(notch_freq)
-    logger.debug(f"Notch filtered: {notch_freq} Hz")
+    # bandpass filtering
+    raw.filter(l_freq=LOW_CUTOFF_FILTER, h_freq=HIGH_CUTOFF_FILTER)
+    logger.info(f"Bandpass filtered: {LOW_CUTOFF_FILTER} - {HIGH_CUTOFF_FILTER} Hz")
 
+    # notch filtering
+    raw.notch_filter(NOTCH_FILTER)
+    logger.info(f"Notch filtered: {NOTCH_FILTER} Hz")
     return raw
 
 
-# Loads, concatenates, and applies filters to a patient's EEG recordings
 def load_patient_recording(patient_id: str) -> BaseRaw:
     """
-    Loads and preprocesses a patient's EEG recordings:
+    Loads and preprocesses a patient's EEG recordings
     - Reads EDFs
     - Concatenates them
     - Applies filters
@@ -243,12 +225,12 @@ def load_patient_recording(patient_id: str) -> BaseRaw:
     Returns:
         BaseRaw: Concatenated and filtered EEG recording.
     """
-    logger = setup_logger(name="load_patient_recording", level=logging.DEBUG)
-    raw_edf_list = load_raw_recordings(patient_id)
+
+    raw_edf_list: list[BaseRaw] = load_raw_recordings(patient_id)
 
     # Concatenate all files into one continuous recording
-    logger.debug("Concatenating EDF files")
-    raw_concatenated = mne.concatenate_raws(raw_edf_list)
+    logger.info("Concatenating EDF files")
+    raw_concatenated: BaseRaw = cast(BaseRaw, mne.concatenate_raws(raw_edf_list))
 
     # Apply filtering
     raw_filtered = apply_filters(raw_concatenated)
@@ -257,30 +239,47 @@ def load_patient_recording(patient_id: str) -> BaseRaw:
 
 # 3. Preprocessing: Segmentation into epochs
 def segment_intervals(
-    interval: SeizureInterval,
+    intervals: list[EpochInterval],
     epoch_length: int = EPOCH_WINDOW_DURATION_SECONDS,  # 30s
     overlap: float = 0.5,  # 50% overlap
-) -> list[dict]:
+) -> list[EpochInterval]:
     """
     Segments a seizure interval into overlapping, labeled epochs.
 
     Args:
-        interval (SeizureInterval): Interval to segment; uses interval.phase.
+        interval (EpochInterval): Interval to segment; uses interval.phase.
         epoch_length (int): Window length in seconds.
         overlap (float): Fractional overlap.
 
     Returns:
-        List[dict]: each dict has {"start": int, "end": int, "phase": str}
+        List[EpochInterval]: List of EpochInterval instances.
     """
-    start_sec, end_sec = int(interval.start), int(interval.end)
-    step = max(1, int(epoch_length * (1 - overlap)))
-    windows: list[dict] = []
 
-    current_start = start_sec
-    while current_start + epoch_length <= end_sec:
-        window_end = current_start + epoch_length
-        windows.append({"start": current_start, "end": window_end, "phase": interval.phase})
-        current_start += step
+    logger.info("Segmenting intervals into 30-second epochs")
+
+    windows: list[EpochInterval] = []
+    step = max(1, int(epoch_length * (1 - overlap)))
+
+    for idx in tqdm(range(len(intervals))):
+        interval = intervals[idx]
+        start_sec, end_sec = int(interval.start), int(interval.end)
+
+        current_start = start_sec
+        interval_windows = 0
+
+        while current_start + epoch_length <= end_sec:
+            window_end = min(current_start + epoch_length, end_sec)
+
+            windows.append(
+                EpochInterval(start=current_start, end=window_end, phase=interval.phase)
+            )
+            interval_windows += 1
+            current_start += step
+
+        logger.info(
+            f"Interval {idx + 1} ({interval.phase}): created {interval_windows} windows"
+        )
+
+    logger.info(f"Total windows created: {len(windows)}")
 
     return windows
-

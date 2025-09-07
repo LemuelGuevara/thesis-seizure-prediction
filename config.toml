@@ -1,41 +1,32 @@
 [data]
-dataset_path = "./dataset"
-specs_output_path = "./specs"
+dataset_path = "./dataset" # Path to the raw dataset
+precomputed_data_path = "./precomputed_data" # Path to store/load precomputed data
 
 [dataset]
-number_of_patients = 1
+number_of_patients = 1 # Total number of patients in the dataset
 
 [preprocessing]
-low_cutoff_filter = 0.5
-high_cutoff_filter = 40.0
-notch_filter = 60.0
-sample_rate = 256
-preictal_minutes = 30
-epoch_window_duration_seconds = 30
+sample_rate = 256 # Sampling rate of EEG signals (Hz)
+preictal_minutes = 30 # Duration of preictal period to consider (minutes)
+epoch_window_duration_seconds = 30 # Duration of each epoch window (seconds)
+low_cutoff_filter = 0.5 # Low cutoff frequency for bandpass filter (Hz)
+high_cutoff_filter = 40.0 # High cutoff frequency for bandpass filter (Hz)
+notch_filter = 60.0 # Frequency for notch filter to remove powerline noise (Hz)
 selected_channels = [
-    "FP1-F7",
-    "F7-T7",
-    "T7-P7",
-    "P7-O1",
-    "FP1-F3",
-    "F3-C3",
-    "C3-P3",
-    "P3-O1",
-    "FP2-F4",
-    "F4-C4",
-    "C4-P4",
-    "P4-O2",
-    "FP2-F8",
-    "F8-T8",
-    "T8-P8-0",
-    "P8-O2",
-    "FZ-CZ",
-    "CZ-PZ",
-]
-band_defs = {
-        "delta": (1, 4.0),
-        "theta": (4.0, 8.0),
-        "alpha": (8.0, 13.0),
-        "beta": (13.0, 30.0),
-        "gamma": (30.0, 40.0),
-    }
+    "FP1-F7", "F7-T7", "T7-P7", "P7-O1",
+    "FP1-F3", "F3-C3", "C3-P3", "P3-O1",
+    "FP2-F4", "F4-C4", "C4-P4", "P4-O2",
+    "FP2-F8", "F8-T8", "T8-P8-0", "P8-O2",
+    "FZ-CZ", "CZ-PZ"
+] # List of EEG channels to use
+normalization_method = "minmax" # Method to normalize data (e.g., minmax, zscore)
+
+[preprocessing.band_defs]
+delta = [1.0, 4.0] # Delta band frequency range (Hz)
+theta = [4.0, 8.0] # Theta band frequency range (Hz)
+alpha = [8.0, 13.0] # Alpha band frequency range (Hz)
+beta = [13.0, 30.0] # Beta band frequency range (Hz)
+gamma = [30.0, 40.0] # Gamma band frequency range (Hz)
+
+[logging]
+logging_level = "DEBUG" # Logging level (DEBUG, INFO, WARNING, ERROR)
