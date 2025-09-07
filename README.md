@@ -2,31 +2,26 @@
 
 ## Environment Setup
 
-```zsh
+Create the environment using Conda or Mamba:
+
+```bash
+# Conda
 conda env create -f environment.yaml
 conda activate seizure-prediction
+
+# Mamba
+mamba env create -f environment.yaml
+mamba activate seizure-prediction
 ```
 
-## Configuration
+To update the environment (e.g., after modifying environment.yaml):
 
-TOML will be used to handle all the config variables. Change values accordingly.
+```bash
+# Using conda
+conda env update -f environment.yaml --prune
 
-```toml
-[data]
-dataset_path = "path_of_the_dataset"
-specs_output_path = "path_of_spectrograms_output"
-
-[dataset]
-number_of_patients = 0 # Change accordingly
-
-[preprocessing]
-low_cutoff_filter = 0.0 # Low cutoff frequency for bandpass filter (Hz)
-high_cutoff_filter = 0.0 # High cutoff frequency for bandpass filter (Hz)
-notch_filter = 0.0 # Frequncy for notch filter to handle powerline noise (Hz)
-sample_rate = 0 # EEG sampling frequency (Hz)
-preictal_minutes = 0 # Duration of preictal window seizure onset (minutes)
-epoch_window_duration_seconds = 0 # Window length for splitting data into epochs (seconds)
-selected_channels = [] # List of EEG channels to include
+# OR using mamba
+mamba env update -f environment.yaml --prune
 ```
 
 ## Dataset
@@ -41,19 +36,65 @@ Link of the EEG recordings: [EEG Recordings](https://drive.google.com/drive/fold
 
 ### Preprocessing
 
-```zsh
-python -m src.preprocessing.eeg_to_spectrogram
-```
-
 **Configuration**: Edit the config.toml file to change the preprocessing parameters such as sample rate, paths, and other preprocessing related variables.
 
 > [!NOTE]
 > When changing the preprocessing params, only edit the config.toml file.
+> Also when adding a new config variable in the config.toml file, make sure to also add in the the config.py file.
 
-- Outputs: spectrograms that are in the form multiple matrices that contain the stft (NPZ format).
+Flow of preprocessing: precompute stfts -> time-frequency -> bispectrum
 
-#### Checking How the Spectrogram Looks Like
+> [!NOTE]
+> Both time-frequency and bispectrum pipelines will the use the precomputed stfts, so make sure
+> that you have run them beforehand.
 
-```zsh
-python -m src.preprocessing.read_specs
+#### Output Directory Structure
+```
+precomputed_data/
+└── patient_01
+    ├── bispectrum
+    │   ├── bispectrum_mosaic_epoch_0_30.npz
+    ├── stfts
+    │   ├── C3-P3
+    │   ├── epoch_0_30.npz
+    ├── time_frequency
+    │   ├── time_frequency_band_epoch_0_30.npz
+```
+
+#### Precompute STFTs
+
+Responsible for precomputing stfts beforehand.
+
+```bash
+python -m src.preprocessing.run_precompute_stfts_pipeline
+```
+
+#### Time-frequency
+
+Converts the stft values from the precomputed stfts into mosaics.
+
+```bash
+python -m src.preprocessing.run_time_frequency_pipeline
+```
+
+**Output**: .npz containing mosaic of the epoch along with their epoch metadata (start, end, phase) 
+
+#### Bispectrum
+
+Convertes the complex stft coefficients from the precomputed stfts into mosaics. 
+
+**Output**: .npz containing mosaic of the epoch along with their epoch metadata (start, end, phase) 
+
+
+```bash
+python -m src.preprocessing.run_bispectrum_pipeline
+```
+
+**Output**: .npz containing mosaic of the epoch along with their epoch metadata (start, end, phase) 
+
+
+#### Checking How the Mosaic Looks Like
+
+```bash
+python -m src.preprocessing.check_mosaic
 ```
