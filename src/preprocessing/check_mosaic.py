@@ -28,7 +28,8 @@ def view_single_mosaic(npz_path: str, save_png: bool = False) -> None:
     plt.figure(figsize=(10, 10))
     plt.imshow(tensor[:, :, 0], cmap="viridis")
     plt.title(f"Epoch {start}-{end} (Phase: {phase})")
-    plt.colorbar()
+    cbar = plt.colorbar()
+    cbar.set_label("Power (dB)", rotation=270, labelpad=20)
     plt.axis("off")
 
     if save_png:
@@ -41,11 +42,11 @@ def view_single_mosaic(npz_path: str, save_png: bool = False) -> None:
 
 if __name__ == "__main__":
     time_frequency = (
-        "precomputed_data/patient_01/time-frequency/time_frequency_band_epoch_0_30.npz"
+        "precomputed_data/patient_01/time-frequency/preictal_tf_band_2951_2981.npz"
     )
     bispctrum = (
-        "precomputed_data/patient_01/bispectrum/bispectrum_mosaic_epoch_2923_2953.npz"
+        "precomputed_data/patient_01/bispectrum/preictal_bispectrum_2966_2996.npz"
     )
 
     # Change accordingly
-    view_single_mosaic(bispctrum)
+    view_single_mosaic(time_frequency)
