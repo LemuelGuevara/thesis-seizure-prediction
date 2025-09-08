@@ -1,3 +1,5 @@
+from src.utils import is_precomputed_data_exists
+
 """
 Bispectrum Pipeline Module
 
@@ -47,6 +49,12 @@ def main():
         )
         os.makedirs(patient_bispectrum_dir, exist_ok=True)
 
+        if is_precomputed_data_exists(data_path=patient_bispectrum_dir):
+            logger.info(
+                f"Precomputed bispectrum mosaics found for patient {patient_id} — skipping."
+            )
+            continue
+
         # 1. Load precomputed STFTs
         stfts_by_channel: dict[str, list[StftStore]] = load_precomputed_stfts(
             patient_stfts_dir
@@ -55,10 +63,11 @@ def main():
         epochs_first_channel = next(iter(stfts_by_channel.values()))
         n_epochs = len(epochs_first_channel)
 
+        processed_files = 0
         for epoch_idx in tqdm(
             range(n_epochs), desc=f"Processing epochs for patient {patient_id}"
         ):
-            # 2–3. Compute bispectrum *per channel*
+            # 2–3. Compute bispectrum per channel*
             bispectra_db: list[np.ndarray] = []
             for ch_name, epochs in stfts_by_channel.items():
                 epoch_meta: StftStore = epochs[epoch_idx]
@@ -81,9 +90,9 @@ def main():
 
             # 4. Build per-epoch mosaic
             mosaic, mode = build_epoch_mosaic(
-                stfts_by_channel=stfts_by_channel,
                 epoch_idx=epoch_idx,
-                type="bispectrum",
+                mode="bispectrum",
+                stfts_by_channel=stfts_by_channel,
                 bispectrum_arr_list=bispectra_db,
             )
 
@@ -97,10 +106,9 @@ def main():
             epoch_meta = epochs_first_channel[epoch_idx]
             filename = os.path.join(
                 patient_bispectrum_dir,
-                f"bispectrum_mosaic_epoch_{epoch_meta.start}_{epoch_meta.end}.npz",
+                f"{epoch_meta.phase}_bispectrum_{epoch_meta.start}_{epoch_meta.end}.npz",
             )
 
-            processed_files = 0
             if not os.path.exists(filename):
                 np.savez_compressed(
                     filename,
@@ -108,7 +116,6 @@ def main():
                     start=epoch_meta.start,
                     end=epoch_meta.end,
                     phase=epoch_meta.phase,
-                    freqs=band_centers,
                 )
 
                 processed_files += 1
