@@ -407,11 +407,9 @@ def precompute_stfts(
 
 def build_epoch_mosaic(
     epoch_idx: int,
+    mode: Literal["tf_band", "tf_detailed", "bispectrum"],
     band_maps: Optional[dict[str, list[BandTimeStore]]] = None,
     stfts_by_channel: dict[str, list[StftStore]] = {},
-    type: Literal[
-        "time_frequency_band", "time_frequency_detailed", "bispectrum"
-    ] = "time_frequency_band",
     per_tile_normalization: bool = True,
     grid: tuple[int, int] = (4, 4),
     bispectrum_arr_list: Optional[list[np.ndarray]] = None,
@@ -423,9 +421,8 @@ def build_epoch_mosaic(
         epoch_idx (int): Index of the epoch to process.
         band_maps (dict[str, list[BandTimeStore]], optional): Precomputed band-level data per channel.
         stfts_by_channel (dict[str, list[StftStore]]): STFT results for each channel.
-        type (str, optional): Type of representation to build:
-            "time_frequency_band", "time_frequency_detailed", or "bispectrum".
-            Defaults to "time_frequency_band".
+        mode (str): Mode of representation to build:
+            "tf_band", "tf_detailed", or "bispectrum".
         per_tile_normalization (bool, optional): Whether to apply min-max normalization to each tile. Defaults to True.
         grid (tuple[int, int], optional): Grid layout (rows, cols) for the mosaic. Defaults to (4, 4).
         bispectrum_arr_list (list[np.ndarray], optional): Optional bispectrum arrays to use instead of STFT/power.
@@ -438,7 +435,7 @@ def build_epoch_mosaic(
 
     rows, cols = grid
     logger.info(
-        f"Building epoch mosaic - epoch_idx: {epoch_idx}, mode: '{type}', "
+        f"Building epoch mosaic - epoch_idx: {epoch_idx}, mode: '{mode}', "
         f"per_tile_normalization: {per_tile_normalization}, grid: {rows}x{cols}"
     )
 
@@ -450,7 +447,7 @@ def build_epoch_mosaic(
         if bispectrum_arr_list is not None:
             tile = bispectrum_arr_list[ch_idx]
         else:
-            if type == "time_frequency_band":
+            if mode == "tf_band":
                 if band_maps is None:
                     raise ValueError(
                         "band_maps is required when type == 'time_frequency_band'"
@@ -461,7 +458,7 @@ def build_epoch_mosaic(
 
         logger.debug(
             f"Channel '{ch_name}' ({ch_idx + 1}/{len(channel_names)}): "
-            f"extracted {type} data, shape: {tile.shape}"
+            f"extracted {mode} data, shape: {tile.shape}"
         )
 
         if per_tile_normalization:
@@ -501,4 +498,4 @@ def build_epoch_mosaic(
         f"used {n_tiles} channels in {rows}x{cols} grid"
     )
 
-    return mosaic, type
+    return mosaic, mode
