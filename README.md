@@ -56,9 +56,9 @@ precomputed_data/
     │   ├── bispectrum_mosaic_epoch_0_30.npz
     ├── stfts
     │   ├── C3-P3
-    │   ├── epoch_0_30.npz
+    │       ├── epoch_0_30.npz
     ├── time_frequency
-    │   ├── time_frequency_band_epoch_0_30.npz
+    │   ├── preictal_tf_band_0_30.npz
 ```
 
 #### Precompute STFTs
