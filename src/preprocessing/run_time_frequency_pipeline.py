@@ -48,7 +48,7 @@ def main():
 
         if is_precomputed_data_exists(data_path=patient_time_frequency_dir):
             logger.info(
-                f"Precomputed mosaics found for patient {patient_id} — skipping."
+                f"Precomputed time-frequency mosaics found for patient {patient_id} — skipping."
             )
             continue
 
@@ -72,10 +72,10 @@ def main():
             epoch_meta: StftStore = first_channel_epochs[epoch_idx]
 
             mosaic, mode = build_epoch_mosaic(
+                epoch_idx=epoch_idx,
+                mode="tf_band",
                 band_maps=band_maps,
                 stfts_by_channel=stfts_by_channel,
-                epoch_idx=epoch_idx,
-                type="time_frequency_band",
             )
 
             # 4. Global normalization
@@ -87,13 +87,12 @@ def main():
             # 6. Save to npz
             filename = os.path.join(
                 patient_time_frequency_dir,
-                f"{mode}_epoch_{epoch_meta.start}_{epoch_meta.end}.npz",
+                f"{epoch_meta.phase}_{mode}_{epoch_meta.start}_{epoch_meta.end}.npz",
             )
 
             if not os.path.exists(filename):
                 np.savez_compressed(
                     filename,
-                    type=str(type),
                     tensor=resized,
                     start=epoch_meta.start,
                     end=epoch_meta.end,
