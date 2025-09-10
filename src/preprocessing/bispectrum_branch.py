@@ -9,7 +9,7 @@ NOTE: Same precomputed STFT will be used in here as inputs for the functions.
 
 import numpy as np
 
-from src.config import BAND_DEFS
+from src.config import PreprocessingConfig
 from src.logger import setup_logger
 
 logger = setup_logger(name="bispectrum_branch")
@@ -32,14 +32,15 @@ def compute_band_average_stft_coeffs(
         band_complex (np.ndarray): Averaged complex STFT per band, shape (n_bands, T)
         band_centers (np.ndarray): Center frequency of each band, shape (n_bands,)
     """
-    bands = list(BAND_DEFS.keys())
+    band_defs = PreprocessingConfig.band_defs
+    bands = list(band_defs.keys())
     n_bands = len(bands)
 
     logger.info(f"Computing band-averaged STFTs for {n_bands} bands.")
 
     if Zxx is None or Zxx.size == 0 or freqs is None:
         band_centers = np.array(
-            [(BAND_DEFS[b][0] + BAND_DEFS[b][1]) / 2.0 for b in bands], dtype=float
+            [(band_defs[b][0] + band_defs[b][1]) / 2.0 for b in bands], dtype=float
         )
         band_complex = np.zeros((n_bands, 0), dtype=np.complex128)
         return band_complex, band_centers
@@ -49,7 +50,7 @@ def compute_band_average_stft_coeffs(
     band_centers = np.zeros(n_bands, dtype=float)
 
     for i, b in enumerate(bands):
-        low, high = BAND_DEFS[b]
+        low, high = band_defs[b]
         mask = (freqs >= low) & (freqs <= high)
 
         logger.debug(f"Band {b}: range=({low}, {high}), bins={np.count_nonzero(mask)}")

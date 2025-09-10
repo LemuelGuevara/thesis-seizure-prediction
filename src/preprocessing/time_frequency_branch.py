@@ -9,7 +9,7 @@ NOTE: STFT related that will be passed in the functions will be the precomputed 
 
 import numpy as np
 
-from src.config import BAND_DEFS
+from src.config import PreprocessingConfig
 from src.datatypes import BandTimeStore, StftStore
 from src.logger import setup_logger
 
@@ -35,24 +35,25 @@ def group_power_into_bands(
 
     power = np.asarray(power)
     freqs = np.asarray(freqs).flatten()
+    band_defs = PreprocessingConfig.band_defs
 
     if power is None or freqs is None or power.size == 0:
-        return np.zeros((len(BAND_DEFS), 0), dtype=float)
+        return np.zeros((len(band_defs), 0), dtype=float)
 
-    bands = list(BAND_DEFS.keys())
+    bands = list(band_defs.keys())
     band_time = np.zeros((len(bands), power.shape[1]), dtype=float)
 
     logger.info(f"Processing {len(bands)} frequency bands: {bands}")
 
-    for i, b in enumerate(bands):
-        low = BAND_DEFS[b][0]
-        high = BAND_DEFS[b][1]
+    for idx, band in enumerate(bands):
+        low = band_defs[band][0]
+        high = band_defs[band][1]
 
         mask = np.logical_and(np.greater_equal(freqs, low), np.less_equal(freqs, high))
         if np.any(mask):
-            band_time[i, :] = np.mean(power[mask, :], axis=0)  # type: ignore
+            band_time[idx, :] = np.mean(power[mask, :], axis=0)  # type: ignore
             logger.debug(
-                f"Band '{b}' ({low}-{high} Hz): {np.sum(mask)} frequency bins averaged"
+                f"Band '{band}' ({low}-{high} Hz): {np.sum(mask)} frequency bins averaged"
             )
 
     logger.info(f"Band grouping complete - output shape: {band_time.shape}")

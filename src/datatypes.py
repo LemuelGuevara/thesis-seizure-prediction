@@ -7,17 +7,6 @@ from typing import Literal, Optional
 
 import numpy as np
 
-from .config import SAMPLE_RATE
-
-
-@dataclass
-class EegConfig:
-    channel_names: list[str]
-    sample_rate: int = SAMPLE_RATE
-    nperseg: int = SAMPLE_RATE
-    noverlap: int = SAMPLE_RATE // 2
-    max_freq: float = 40.0
-
 
 @dataclass
 class EpochInterval:

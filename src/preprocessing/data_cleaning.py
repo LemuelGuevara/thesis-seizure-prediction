@@ -18,15 +18,7 @@ from tqdm import tqdm
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/../")
 
-from src.config import (
-    DATASET_PATH,
-    EPOCH_WINDOW_DURATION_SECONDS,
-    HIGH_CUTOFF_FILTER,
-    LOW_CUTOFF_FILTER,
-    NOTCH_FILTER,
-    PREICTAL_MINUTES,
-    SELECTED_CHANNELS,
-)
+from src.config import DataConfig, PreprocessingConfig
 from src.datatypes import EpochInterval
 from src.logger import setup_logger
 from src.utils import parse_time_str
@@ -100,7 +92,9 @@ def extract_seizure_intervals(
 
         seizure_start_time = file_start + timedelta(seconds=seizure.start)
         seizure_end_time = file_start + timedelta(seconds=seizure.end)
-        preictal_start_time = seizure_start_time - timedelta(minutes=PREICTAL_MINUTES)
+        preictal_start_time = seizure_start_time - timedelta(
+            minutes=PreprocessingConfig.preictal_minutes
+        )
 
         logger.debug(
             "seizure_start: %s, seizure_end: %s",
@@ -165,7 +159,7 @@ def load_raw_recordings(patient_id: str) -> list[BaseRaw]:
 
     logger.info(f"Loading EDF files for patient {patient_id}")
 
-    patient_folder = os.path.join(DATASET_PATH, f"chb{patient_id}")
+    patient_folder = os.path.join(DataConfig.dataset_path, f"chb{patient_id}")
     raw_edf_list: list[BaseRaw] = []
 
     for root, dirs, files in os.walk(patient_folder):
@@ -177,7 +171,9 @@ def load_raw_recordings(patient_id: str) -> list[BaseRaw]:
             logger.debug(f"Reading file: {file}")
 
             raw_edf = mne.io.read_raw_edf(recording_path, preload=True, verbose="error")
-            raw_edf.pick(SELECTED_CHANNELS)  # only keep channels defined in config
+            raw_edf.pick(
+                PreprocessingConfig.selected_channels
+            )  # only keep channels defined in config
             raw_edf_list.append(raw_edf)
 
     if not raw_edf_list:
@@ -203,12 +199,17 @@ def apply_filters(
     logger.info("Applying bandpass and notch filters")
 
     # bandpass filtering
-    raw.filter(l_freq=LOW_CUTOFF_FILTER, h_freq=HIGH_CUTOFF_FILTER)
-    logger.info(f"Bandpass filtered: {LOW_CUTOFF_FILTER} - {HIGH_CUTOFF_FILTER} Hz")
+    raw.filter(
+        l_freq=PreprocessingConfig.low_cutoff_filter,
+        h_freq=PreprocessingConfig.high_cutoff_filter,
+    )
+    logger.info(
+        f"Bandpass filtered: {PreprocessingConfig.low_cutoff_filter} - {PreprocessingConfig.high_cutoff_filter} Hz"
+    )
 
     # notch filtering
-    raw.notch_filter(NOTCH_FILTER)
-    logger.info(f"Notch filtered: {NOTCH_FILTER} Hz")
+    raw.notch_filter(PreprocessingConfig.notch_filter)
+    logger.info(f"Notch filtered: {PreprocessingConfig.notch_filter} Hz")
     return raw
 
 
@@ -240,7 +241,6 @@ def load_patient_recording(patient_id: str) -> BaseRaw:
 # 3. Preprocessing: Segmentation into epochs
 def segment_intervals(
     intervals: list[EpochInterval],
-    epoch_length: int = EPOCH_WINDOW_DURATION_SECONDS,  # 30s
     overlap: float = 0.5,  # 50% overlap
 ) -> list[EpochInterval]:
     """
@@ -256,6 +256,7 @@ def segment_intervals(
     """
 
     logger.info("Segmenting intervals into 30-second epochs")
+    epoch_length = PreprocessingConfig.epoch_length
 
     windows: list[EpochInterval] = []
     step = max(1, int(epoch_length * (1 - overlap)))

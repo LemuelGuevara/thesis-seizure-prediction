@@ -5,7 +5,7 @@ Responsible for setting up loggers.
 import logging
 import sys
 
-from .config import LOGGING_LEVEL
+from src.config import LoggingConfig
 
 
 def setup_logger(name: str) -> logging.Logger:
@@ -18,8 +18,9 @@ def setup_logger(name: str) -> logging.Logger:
     Returns:
         logging.Logger: Configured logger instance.
     """
+    logging_config = LoggingConfig()
 
-    log_level = getattr(logging, LOGGING_LEVEL.upper(), logging.DEBUG)
+    log_level = getattr(logging, logging_config.logging_level.upper(), logging.DEBUG)
     logger = logging.getLogger(name)
     logger.setLevel(log_level)
 
@@ -36,3 +37,14 @@ def setup_logger(name: str) -> logging.Logger:
     stream_handler.setFormatter(formatter)
     logger.addHandler(stream_handler)
     return logger
+
+
+def get_all_active_loggers():
+    """Get all loggers that have been created and have handlers"""
+
+    loggers = []
+    for name in logging.getLogger().manager.loggerDict:
+        logger = logging.getLogger(name)
+        if logger.handlers:  # Only loggers that actually output something
+            loggers.append(logger)
+    return loggers

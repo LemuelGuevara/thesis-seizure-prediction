@@ -17,60 +17,14 @@ from sklearn.decomposition import PCA, FastICA
 from sklearn.preprocessing import minmax_scale
 from tqdm import tqdm
 
-from src.config import NORMALIZATION_METHOD, SAMPLE_RATE, SELECTED_CHANNELS
-from src.datatypes import BandTimeStore, EegConfig, EpochInterval, StftStore
+from src.config import PreprocessingConfig
+from src.datatypes import BandTimeStore, EpochInterval, StftStore
 from src.logger import setup_logger
 
 logger = setup_logger(name="data_transformation")
 
 # small epsilon for log computations
 EPS = 1e-8
-
-
-def compute_stft_epoch(
-    epoch_signal: np.ndarray,
-    sample_rate: int = SAMPLE_RATE,
-    nperseg: int = SAMPLE_RATE,
-    noverlap: int = SAMPLE_RATE // 2,
-    max_freq: float = 40.0,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Compute the Short-Time Fourier Transform (STFT) for a 1-D epoch signal.
-
-    Args:
-        epoch_signal (np.ndarray): Input 1-D time-domain signal for one epoch.
-        sample_rate (int, optional): Sampling rate of the signal in Hz. Defaults to SAMPLE_RATE.
-        nperseg (int, optional): Length of each STFT segment in samples. Defaults to SAMPLE_RATE.
-        noverlap (int, optional): Number of samples to overlap between segments. Defaults to SAMPLE_RATE // 2.
-        max_freq (float, optional): Maximum frequency (Hz) to keep in the output.
-            Frequencies above this threshold are discarded. Defaults to 40.0.
-
-    Returns:
-        tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-            - stft_db: Magnitude of the STFT in decibels (20 * log10(|Zxx|)),
-              shape (F_trim, T).
-            - freqs_trim: Frequency bins (Hz) corresponding to the trimmed STFT,
-              shape (F_trim,).
-            - times: Time bins (s) corresponding to the STFT columns,
-              shape (T,).
-            - Zxx_trimmed: Complex STFT values before magnitude/log scaling,
-              shape (F_trim, T).
-    """
-
-    x = np.asarray(epoch_signal)
-    if x.ndim > 1:
-        x = np.squeeze(x)
-
-    freqs, times, Zxx_full = stft(x, fs=sample_rate, nperseg=nperseg, noverlap=noverlap)
-    mask = freqs <= max_freq
-
-    Zxx = Zxx_full[mask, :]  # complex (F_trim, T)
-    mag = np.abs(Zxx)  # magnitude
-    stft_db = 20.0 * np.log10(mag + EPS)  # dB
-
-    freqs_trim = freqs[mask]
-
-    return stft_db, freqs_trim, times, Zxx
 
 
 def stft_db_to_power(stft_db: np.ndarray) -> np.ndarray:
@@ -113,20 +67,21 @@ def normalize_power_matrix(power_matrix: np.ndarray) -> np.ndarray:
     # - "minmax": Min-max normalization, (x - min) / (max - min)
     # - "zscore": Z-score normalization, (x - mean) / std
 
-    if NORMALIZATION_METHOD == "minmax":
+    normalization_method = PreprocessingConfig.normalization_method
+    if normalization_method == "minmax":
         mn = np.min(power_matrix)
         mx = np.max(power_matrix)
         if mx - mn == 0:
             return np.zeros_like(power_matrix)
         return np.divide((power_matrix - mn), (mx - mn))
-    elif NORMALIZATION_METHOD == "zscore":
+    elif normalization_method == "zscore":
         mu = np.mean(power_matrix)
         sd = np.std(power_matrix)
         if sd == 0:
             return np.zeros_like(power_matrix)
         return np.divide((power_matrix - mu), sd)
     else:
-        raise ValueError(f"Unknown normalization method: {NORMALIZATION_METHOD}")
+        raise ValueError(f"Unknown normalization method: {normalization_method}")
 
 
 def normalize_to_unint8_rgb(arr: np.ndarray) -> np.ndarray:
@@ -236,10 +191,54 @@ def get_top_channels(
     return best_channel_indices.tolist()
 
 
+def compute_stft_epoch(
+    epoch_signal: np.ndarray,
+    max_freq: float = 40.0,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Compute the Short-Time Fourier Transform (STFT) for a 1-D epoch signal.
+
+    Args:
+        epoch_signal (np.ndarray): Input 1-D time-domain signal for one epoch.
+        max_freq (float, optional): Maximum frequency (Hz) to keep in the output.
+            Frequencies above this threshold are discarded. Defaults to 40.0.
+
+    Returns:
+        tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+            - stft_db: Magnitude of the STFT in decibels (20 * log10(|Zxx|)),
+              shape (F_trim, T).
+            - freqs_trim: Frequency bins (Hz) corresponding to the trimmed STFT,
+              shape (F_trim,).
+            - times: Time bins (s) corresponding to the STFT columns,
+              shape (T,).
+            - Zxx_trimmed: Complex STFT values before magnitude/log scaling,
+              shape (F_trim, T).
+    """
+
+    nperseg = PreprocessingConfig.sample_rate
+    noverlap = PreprocessingConfig.sample_rate // 2
+
+    x = np.asarray(epoch_signal)
+    if x.ndim > 1:
+        x = np.squeeze(x)
+
+    freqs, times, Zxx_full = stft(
+        x, fs=PreprocessingConfig.sample_rate, nperseg=nperseg, noverlap=noverlap
+    )
+    mask = freqs <= max_freq
+
+    Zxx = Zxx_full[mask, :]  # complex (F_trim, T)
+    mag = np.abs(Zxx)  # magnitude
+    stft_db = 20.0 * np.log10(mag + EPS)  # dB
+
+    freqs_trim = freqs[mask]
+
+    return stft_db, freqs_trim, times, Zxx
+
+
 def compute_stft_for_segment(
     data: np.ndarray,
     interval: EpochInterval,
-    eeg_config: EegConfig,
     normalize_power: bool,
 ) -> StftStore:
     """
@@ -248,7 +247,6 @@ def compute_stft_for_segment(
     Args:
         data (np.ndarray): Input array to process.
         interval (EpochInterval): Current epoch interval to process.
-        eeg_config (EegConfig): Instance of the EEG config made.
         normalize_power (bool): Whether to normalize STFT power to db.
     """
     if data.size == 0:
@@ -264,15 +262,7 @@ def compute_stft_for_segment(
         )
 
     sig = np.squeeze(data)
-    sample_rate, nperseg, noverlap, max_freq = (
-        eeg_config.sample_rate,
-        eeg_config.nperseg,
-        eeg_config.noverlap,
-        eeg_config.max_freq,
-    )
-    stft_db, freqs, times, Zxx = compute_stft_epoch(
-        sig, sample_rate, nperseg, noverlap, max_freq
-    )
+    stft_db, freqs, times, Zxx = compute_stft_epoch(epoch_signal=sig)
 
     power = stft_db_to_power(stft_db)
     if normalize_power and power is not None:
@@ -332,8 +322,7 @@ def precompute_stfts(
     if normalize_power:
         logger.info(f"Normalization method: {normalization_method}")
 
-    eeg_config = EegConfig(channel_names=SELECTED_CHANNELS)
-    channel_names = eeg_config.channel_names
+    channel_names = PreprocessingConfig.selected_channels
     sfreq = float(recording.info["sfreq"])
 
     logger.info(f"Selected channels: {channel_names}")
@@ -359,7 +348,7 @@ def precompute_stfts(
             f"{phase} [{start_sec}-{end_sec}s] samples [{start_sample}-{end_sample}]"
         )
 
-        for ch in SELECTED_CHANNELS:
+        for ch in channel_names:
             idx_ch = ch_index_map[ch]
 
             # Save inside <patient_dir>/<channel>/
@@ -376,30 +365,18 @@ def precompute_stfts(
                 computed_stft = compute_stft_for_segment(
                     data_2d,
                     epoch,
-                    eeg_config,
                     normalize_power,
                 )
 
                 try:
-                    np.savez_compressed(
-                        filename,
-                        raw_data=data_2d,
-                        phase=computed_stft.phase,
-                        start=computed_stft.start,
-                        end=computed_stft.end,
-                        stft_db=computed_stft.stft_db,
-                        power=computed_stft.power,
-                        Zxx=computed_stft.Zxx,
-                        freqs=computed_stft.freqs,
-                        times=computed_stft.times,
-                    )
+                    np.savez_compressed(filename, **computed_stft.__dict__)
                     processed_files += 1
                 except Exception as e:
                     logger.error(f"Failed to save {filename}: {e}")
 
     logger.info("STFT precomputation completed successfully!")
     logger.info(
-        f"Processed {len(segmented_intervals)} epochs across {len(SELECTED_CHANNELS)} channels"
+        f"Processed {len(segmented_intervals)} epochs across {len(channel_names)} channels"
     )
     logger.info(f"Total STFT files created: {processed_files}")
     logger.info(f"Results saved in: {patient_stfts_dir}")
