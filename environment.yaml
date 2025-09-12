@@ -1,5 +1,6 @@
 name: seizure-prediction
 channels:
+  - pytorch
   - conda-forge
 dependencies:
   - python=3.12
@@ -11,3 +12,6 @@ dependencies:
   - toml
   - tqdm
   - prettytable
+  - pytorch
+  - torchvision
+  - cpuonly
