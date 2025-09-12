@@ -338,7 +338,7 @@ def precompute_stfts(
         phase_counts[epoch.phase] = phase_counts.get(epoch.phase, 0) + 1
     logger.info(f"Intervals by phase: {phase_counts}")
 
-    def _process_task(object: tuple[str, EpochInterval]) -> bool:
+    def _save_channel_epoch_stft(object: tuple[str, EpochInterval]) -> bool:
         ch, epoch = object
         start_sec, end_sec, phase = epoch.start, epoch.end, epoch.phase
         start_sample, end_sample = int(start_sec * sfreq), int(end_sec * sfreq)
@@ -383,7 +383,7 @@ def precompute_stfts(
     with ThreadPoolExecutor(max_workers=8) as pool:
         results = list(
             tqdm(
-                pool.map(_process_task, tasks),
+                pool.map(_save_channel_epoch_stft, tasks),
                 total=len(tasks),
                 desc="Computing STFTs",
             )
