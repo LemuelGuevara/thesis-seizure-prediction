@@ -7,7 +7,9 @@ are the backbone for creating the precomputed STFTS as a whole.
 """
 
 import os
+import time
 from typing import List, Literal, Optional, Tuple
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 from mne.io.base import BaseRaw
@@ -336,10 +338,8 @@ def precompute_stfts(
         phase_counts[epoch.phase] = phase_counts.get(epoch.phase, 0) + 1
     logger.info(f"Intervals by phase: {phase_counts}")
 
-    processed_files = 0
-
-    for epoch_idx in tqdm(range(len(segmented_intervals)), desc="Processing epochs"):
-        epoch = segmented_intervals[epoch_idx]
+    def _process_task(object: tuple[str, EpochInterval]) -> bool:
+        ch, epoch = object
         start_sec, end_sec, phase = epoch.start, epoch.end, epoch.phase
         start_sample, end_sample = int(start_sec * sfreq), int(end_sec * sfreq)
 
@@ -348,37 +348,57 @@ def precompute_stfts(
             f"{phase} [{start_sec}-{end_sec}s] samples [{start_sample}-{end_sample}]"
         )
 
-        for ch in channel_names:
-            idx_ch = ch_index_map[ch]
+        idx_ch = ch_index_map[ch]
 
-            # Save inside <patient_dir>/<channel>/
-            channel_dir = os.path.join(patient_stfts_dir, ch)
-            os.makedirs(channel_dir, exist_ok=True)
-            filename = os.path.join(channel_dir, f"epoch_{epoch.start}_{epoch.end}.npz")
+        # Save inside <patient_dir>/<channel>/
+        channel_dir = os.path.join(patient_stfts_dir, ch)
+        os.makedirs(channel_dir, exist_ok=True)
+        filename = os.path.join(channel_dir, f"epoch_{epoch.start}_{epoch.end}.npz")
 
-            if not os.path.exists(filename):
-                data = recording.get_data(
-                    picks=[idx_ch], start=start_sample, stop=end_sample
-                )
-                data_2d = np.asarray(data)
+        if not os.path.exists(filename):
+            data = recording.get_data(
+                picks=[idx_ch], start=start_sample, stop=end_sample
+            )
+            data_2d = np.asarray(data)
 
-                computed_stft = compute_stft_for_segment(
-                    data_2d,
-                    epoch,
-                    normalize_power,
-                )
+            computed_stft = compute_stft_for_segment(
+                data_2d,
+                epoch,
+                normalize_power,
+            )
 
-                try:
-                    np.savez_compressed(filename, **computed_stft.__dict__)
-                    processed_files += 1
-                except Exception as e:
-                    logger.error(f"Failed to save {filename}: {e}")
+            try:
+                np.savez_compressed(filename, **computed_stft.__dict__)
+            except Exception as e:
+                logger.error(f"Failed to save {filename}: {e}")
 
+            return True
+        return False
+
+    tasks: list[tuple[str, EpochInterval]] = [
+        (ch, epoch) for epoch in segmented_intervals for ch in channel_names
+    ]
+
+    start = time.perf_counter()
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(
+            tqdm(
+                pool.map(_process_task, tasks),
+                total=len(tasks),
+                desc="Computing STFTs",
+            )
+        )
+
+    elapsed = time.perf_counter() - start
+
+    total_tasks = len(tasks)
+    avg_speed = total_tasks / elapsed
+    logger.debug(f"Average speed: {avg_speed:.2f} it/s")
     logger.info("STFT precomputation completed successfully!")
     logger.info(
-        f"Processed {len(segmented_intervals)} epochs across {len(channel_names)} channels"
+        f"Processed {len(results)} STFT epochs across {len(channel_names)} channels"
     )
-    logger.info(f"Total STFT files created: {processed_files}")
+    logger.info(f"Total STFT files created: {sum(results)}")
     logger.info(f"Results saved in: {patient_stfts_dir}")
 
 
