@@ -100,7 +100,8 @@ class CBAM(nn.Module):
         return x_out
     
 def test_cbam():
-    dummy_input = torch.randn(2, 1280, 7, 7)  # Simulates EfficientNetB0's last feature output
+    # Simulates EfficientNetB0's last feature output
+    dummy_input = torch.randn(2, 1280, 7, 7)
     cbam = CBAM(gate_channels=1280)
     output = cbam(dummy_input)
     print("CBAM output shape:", output.shape)
