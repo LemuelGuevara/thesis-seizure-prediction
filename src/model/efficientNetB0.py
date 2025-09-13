@@ -3,21 +3,23 @@ import torch.nn as nn
 from torchvision.models import efficientnet_b0, EfficientNet_B0_Weights
 from src.model.cbam import CBAM
 
+import torch
+import torch.nn as nn
+from torchvision.models import efficientnet_b0, EfficientNet_B0_Weights
+from src.model.cbam import CBAM
+
 class EfficientNetWithCBAM(nn.Module):
     def __init__(self):
         super(EfficientNetWithCBAM, self).__init__()
         self.base_model = efficientnet_b0(weights=EfficientNet_B0_Weights.DEFAULT)
-        self.features = self.base_model.features 
+        self.features = self.base_model.features
         self.cbam = CBAM(gate_channels=1280)
-        self.pool = nn.AdaptiveAvgPool2d(1)
 
     def forward(self, x):
-        x = self.features(x)
-        #Add CBAM to the Model
-        x = self.cbam(x)
-        x = self.pool(x)
-        x = x.view(x.size(0), -1)  # [B, 1280]
-        return x
+        x = self.features(x)       # [B, 1280, 7, 7]
+        x = self.cbam(x)           # [B, 1280, 7, 7]
+        return x                   # ✅ Preserve spatial dimensions
+
     
 def main():
     model = EfficientNetWithCBAM()
