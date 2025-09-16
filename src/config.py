@@ -49,3 +49,53 @@ class LoggingConfig:
     logging_level: ClassVar[Literal["DEBUG", "VERBOSE", "INFO", "WARNING", "ERROR"]] = (
         config["logging"]["logging_level"]
     )
+
+
+basic_conv_toml = config["model"]["classification"]["basic_conv"]
+cbam_toml = config["model"]["classification"]["cbam"]
+multi_seizure_model_toml = config["model"]["classification"]["multi_seizure_model"]
+data_loader_toml = config["model"]["data"]["data_loader"]
+train_toml = config["model"]["train"]
+
+
+@dataclass
+class BasicConvConfig:
+    in_planes: ClassVar[int] = basic_conv_toml["in_planes"]
+    out_planes: ClassVar[int] = basic_conv_toml["out_planes"]
+    kernel_size: ClassVar[int] = basic_conv_toml["kernel_size"]
+    stride: ClassVar[int] = basic_conv_toml["stride"]
+    padding: ClassVar[int] = basic_conv_toml["padding"]
+    dilation: ClassVar[int] = basic_conv_toml["dilation"]
+    groups: ClassVar[int] = basic_conv_toml["groups"]
+    relu: ClassVar[bool] = basic_conv_toml["relu"]
+    batch_normalization: ClassVar[bool] = basic_conv_toml["batch_normalization"]
+    bias: ClassVar[bool] = basic_conv_toml["bias"]
+    eps: ClassVar[float] = basic_conv_toml["eps"]
+    momentum: ClassVar[float] = basic_conv_toml["momentum"]
+    affine: ClassVar[bool] = basic_conv_toml["affine"]
+
+
+@dataclass
+class CBAMConfig:
+    gate_channels: ClassVar[int] = cbam_toml["gate_channels"]
+    reduction_ratio: ClassVar[int] = cbam_toml["reduction_ratio"]
+    no_spatial: ClassVar[bool] = cbam_toml["no_spatial"]
+
+
+@dataclass
+class MultiSeizureModelConfig:
+    feature_dim: ClassVar[int] = multi_seizure_model_toml["feature_dim"]
+    num_clsses: ClassVar[int] = multi_seizure_model_toml["num_classes"]
+
+
+@dataclass
+class DataLoaderConfig:
+    batch_size: ClassVar[int] = data_loader_toml["batch_size"]
+    shuffle: ClassVar[bool] = data_loader_toml["shuffle"]
+    num_workers: ClassVar[int] = data_loader_toml["num_workers"]
+
+
+@dataclass
+class Trainconfig:
+    num_epochs: ClassVar[int] = train_toml["num_epochs"]
+    lr: ClassVar[float] = train_toml["lr"]
