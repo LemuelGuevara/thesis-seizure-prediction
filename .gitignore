@@ -4,3 +4,4 @@ dataset/
 precomputed_data/
 .vscode
 *.toml
+runs/
