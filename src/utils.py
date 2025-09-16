@@ -3,9 +3,11 @@ Functions that can be resued as utility to other modules.
 """
 
 import os
+import platform
 from datetime import datetime, timedelta
 
 import toml
+import torch
 
 
 def load_toml_config(path: str) -> dict:
@@ -63,3 +65,12 @@ def load_patient_summary(patient_id: str, dataset_path: str):
 
 def is_precomputed_data_exists(data_path: str) -> bool:
     return os.path.exists(data_path) and len(os.listdir(data_path)) > 0
+
+
+def get_torch_device() -> torch.device:
+    if platform.system() == "Windows" and torch.cuda.is_available():
+        return torch.device("cuda")
+    elif platform.system() == "Darwin" and torch.backends.mps.is_available():
+        return torch.device("mps")
+    else:
+        return torch.device("cpu")
