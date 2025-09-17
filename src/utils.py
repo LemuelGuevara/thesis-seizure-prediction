@@ -68,7 +68,7 @@ def is_precomputed_data_exists(data_path: str) -> bool:
 
 
 def get_torch_device() -> torch.device:
-    if platform.system() == "Windows" and torch.cuda.is_available():
+    if platform.system() in ("Windows", "Linux") and torch.cuda.is_available():
         return torch.device("cuda")
     elif platform.system() == "Darwin" and torch.backends.mps.is_available():
         return torch.device("mps")
