@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from sklearn.metrics import accuracy_score, f1_score, recall_score
 from torch.utils.data import TensorDataset
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
@@ -17,6 +18,7 @@ writer = SummaryWriter()
 
 
 def main():
+    logger.info(f"Torch device: {device}")
     logger.info("Starting training for all patients")
 
     for idx in tqdm(range(1, DataConfig.number_of_patients + 1), desc="Patients"):
@@ -50,11 +52,12 @@ def main():
             optimizer = optim.Adam(model.parameters(), lr=Trainconfig.lr)
 
             # Training
-            model.train()
             for epoch in range(Trainconfig.num_epochs):
+                model.train()
                 epoch_loss = 0.0
+
                 for batch_tf, batch_bis, batch_labels in tqdm(
-                    train_loader, desc="Train Batches"
+                    train_loader, desc="Train Batches", leave=False
                 ):
                     batch_tf = batch_tf.to(device, non_blocking=True)
                     batch_bis = batch_bis.to(device, non_blocking=True)
@@ -63,29 +66,40 @@ def main():
                     optimizer.zero_grad()
                     outputs = model(batch_tf, batch_bis)
                     loss = criterion(outputs, batch_labels)
-                    writer.add_scalar("Loss/train", loss, epoch)
                     loss.backward()
                     optimizer.step()
 
                     epoch_loss += loss.item()
-                    del outputs, loss
+
+                model.eval()
+                with torch.no_grad():
+                    for batch_tf, batch_bis, batch_labels in test_loader:
+                        batch_tf = batch_tf.to(device, non_blocking=True)
+                        batch_bis = batch_bis.to(device, non_blocking=True)
+                        batch_labels = batch_labels.to(device, non_blocking=True)
+
+                        outputs = model(batch_tf, batch_bis)
+
+                        preds = torch.argmax(outputs, dim=1).cpu().numpy()
+                        all_preds.extend(preds)
+                        all_labels.extend(batch_labels.cpu().numpy())
 
                 logger.info(
-                    f" Fold {sample_idx + 1} Epoch {epoch + 1}/{Trainconfig.num_epochs} - loss: {epoch_loss:.4f}"
+                    f"Fold {sample_idx + 1} Epoch {epoch + 1}/{Trainconfig.num_epochs} "
+                    f"- train_loss: {epoch_loss:.4f}"
                 )
+
+                writer.add_scalar("Loss/train", epoch_loss, epoch)
                 writer.flush()
 
-            # Evaluation
-            model.eval()
-            with torch.no_grad():
-                for batch_tf, batch_bis, batch_labels in test_loader:
-                    batch_tf = batch_tf.to(device)
-                    batch_bis = batch_bis.to(device)
+        acc = accuracy_score(all_labels, all_preds)
+        rec = recall_score(all_labels, all_preds, average="binary")
+        f1 = f1_score(all_labels, all_preds, average="binary")
 
-                    outputs = model(batch_tf, batch_bis)
-                    preds = torch.argmax(outputs, dim=1).cpu().numpy()
-                    all_preds.extend(preds)
-                    all_labels.extend(batch_labels.numpy())
+        print("\n===== Final LOOCV Results =====")
+        print(f"Accuracy: {acc:.4f}")
+        print(f"Recall:   {rec:.4f}")
+        print(f"F1 Score: {f1:.4f}")
 
 
 if __name__ == "__main__":
