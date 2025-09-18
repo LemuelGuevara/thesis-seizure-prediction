@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from sklearn.metrics import accuracy_score, f1_score, recall_score
+from torch.amp import GradScaler, autocast
 from torch.utils.data import TensorDataset
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
@@ -46,10 +47,11 @@ def main():
                 tensor_dataset=TensorDataset(tf_test, bis_test, labels_test)
             )
 
-            # Get Model
+            # Initialize model, criterion, optimizer, scaler
             model = MultimodalSeizureModel().to(device)
             criterion = nn.CrossEntropyLoss()
             optimizer = optim.Adam(model.parameters(), lr=Trainconfig.lr)
+            scaler = GradScaler(device.type)
 
             # Training
             for epoch in range(Trainconfig.num_epochs):
@@ -64,12 +66,22 @@ def main():
                     batch_labels = batch_labels.to(device, non_blocking=True)
 
                     optimizer.zero_grad()
-                    outputs = model(batch_tf, batch_bis)
-                    loss = criterion(outputs, batch_labels)
-                    loss.backward()
-                    optimizer.step()
+
+                    # Mixed precision
+                    with autocast(device.type):
+                        outputs = model(batch_tf, batch_bis)
+                        loss = criterion(outputs, batch_labels)
+
+                    scaler.scale(loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
 
                     epoch_loss += loss.item()
+
+                logger.info(
+                    f"Fold {sample_idx + 1} Epoch {epoch + 1}/{Trainconfig.num_epochs} "
+                    f"- train_loss: {epoch_loss:.4f}"
+                )
 
                 model.eval()
                 with torch.no_grad():
@@ -84,13 +96,8 @@ def main():
                         all_preds.extend(preds)
                         all_labels.extend(batch_labels.cpu().numpy())
 
-                logger.info(
-                    f"Fold {sample_idx + 1} Epoch {epoch + 1}/{Trainconfig.num_epochs} "
-                    f"- train_loss: {epoch_loss:.4f}"
-                )
-
-                writer.add_scalar("Loss/train", epoch_loss, epoch)
-                writer.flush()
+                    writer.add_scalar("Loss/train", epoch_loss, epoch)
+                    writer.flush()
 
         acc = accuracy_score(all_labels, all_preds)
         rec = recall_score(all_labels, all_preds, average="binary")
