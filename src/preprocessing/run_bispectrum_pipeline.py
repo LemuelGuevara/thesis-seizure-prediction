@@ -18,8 +18,7 @@ from src.datatypes import StftStore
 from src.logger import get_all_active_loggers, setup_logger
 
 from .bispectrum_branch import (
-    compute_band_average_stft_coeffs,
-    compute_band_level_bispectrum,
+    compute_bispectrum_estimation,
 )
 from .data_transformation import build_epoch_mosaic, normalize_globally, resize_to_224
 from .loaders import load_precomputed_stfts
@@ -75,15 +74,9 @@ def main():
                 for ch_name, epochs in stfts_by_channel.items():
                     epoch_meta: StftStore = epochs[epoch_idx]
 
-                    band_complex, band_centers = compute_band_average_stft_coeffs(
-                        Zxx=epoch_meta.Zxx, freqs=epoch_meta.freqs
-                    )
-
-                    _, bispectrum_db = compute_band_level_bispectrum(
+                    _, bispectrum_db = compute_bispectrum_estimation(
                         Zxx=epoch_meta.Zxx,
                         freqs=epoch_meta.freqs,
-                        band_complex=band_complex,
-                        band_centers=band_centers,
                     )
 
                     bispectra_db.append(bispectrum_db)
