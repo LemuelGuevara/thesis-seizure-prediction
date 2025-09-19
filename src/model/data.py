@@ -125,6 +125,6 @@ def create_data_loader(tensor_dataset: TensorDataset) -> DataLoader:
         dataset=tensor_dataset,
         batch_size=DataLoaderConfig.batch_size,
         shuffle=DataLoaderConfig.shuffle,
-        num_workers=DataLoaderConfig.num_workers,
+        num_workers=os.cpu_count() or 1,
         pin_memory=True,
     )
