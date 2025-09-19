@@ -69,25 +69,23 @@ def compute_band_average_stft_coeffs(
     return band_complex, band_centers
 
 
-def compute_band_level_bispectrum(
+def compute_bispectrum_estimation(
     Zxx: np.ndarray,
     freqs: np.ndarray,
-    band_complex: np.ndarray,
-    band_centers: np.ndarray,
     eps: float = _EPS,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
-    Compute the band-level bispectrum using the triple product:
+    Computes the  bispectrum estimation using the triple product:
         B[i, j] = mean_t( X_i(t) * X_j(t) * conj(X_sum(t)) )
-
     where X_sum(t) is the STFT coefficient at the frequency bin
     nearest to (center_i + center_j).
+
+    Additionally, this function also handles the flexibility of either computing
+    at band-level or at full stft level.
 
     Args:
         Zxx (np.ndarray): Complex STFT array of shape (n_freqs, T).
         freqs (np.ndarray): Array of frequency bin centers, shape (n_freqs,).
-        band_complex (np.ndarray): Band-averaged complex coefficients, shape (n_bands, T).
-        band_centers (np.ndarray): Center frequencies for each band, shape (n_bands,).
         eps (float): Small constant added for numerical stability in log scaling.
 
     Returns:
@@ -95,16 +93,26 @@ def compute_band_level_bispectrum(
         B_db: Real bispectrum magnitude in dB, same shape as B_complex.
     """
 
-    n_bands = band_complex.shape[0]
-    logger.info(f"Computing bispectrum for {n_bands} bands.")
+    # Flexibility for either computing at band level or full stft
+    if PreprocessingConfig.band_level_bispectrum:
+        band_complex, band_centers = compute_band_average_stft_coeffs(
+            Zxx=Zxx, freqs=freqs
+        )
+        coeffs, centers = band_complex, band_centers
+    else:
+        coeffs, centers = Zxx, freqs
 
-    B_complex = np.zeros((n_bands, n_bands), dtype=np.complex128)
+    n_bins = coeffs.shape[0]
+    logger.info(
+        f"Computing {'band-level' if PreprocessingConfig.band_level_bispectrum else 'full'} bispectrum for {n_bins} bins."
+    )
 
+    B_complex = np.zeros((n_bins, n_bins), dtype=np.complex128)
     if freqs.size == 0 or Zxx.size == 0:
         return B_complex, 20.0 * np.log10(np.abs(B_complex) + eps)
 
     # Pairwise target freqs
-    targets = band_centers[:, None] + band_centers[None, :]
+    targets = centers[:, None] + centers[None, :]
     logger.debug("Computed pairwise target frequencies.")
 
     # Nearest index lookup (vectorized)

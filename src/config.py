@@ -41,6 +41,9 @@ class PreprocessingConfig:
     normalization_method: ClassVar[Literal["minmax", "zscore"]] = config[
         "preprocessing"
     ]["normalization_method"]
+    band_level_bispectrum: ClassVar[bool] = config["preprocessing"][
+        "band_level_bispectrum"
+    ]
     band_defs: ClassVar[dict[str, list[float]]] = config["preprocessing"]["band_defs"]
 
 
