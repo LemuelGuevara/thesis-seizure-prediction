@@ -7,6 +7,9 @@ estimations.
 NOTE: Same precomputed STFT will be used in here as inputs for the functions.
 """
 
+import os
+from concurrent.futures import ThreadPoolExecutor
+
 import numpy as np
 
 from src.config import PreprocessingConfig
@@ -127,19 +130,29 @@ def compute_bispectrum_estimation(
 
     conj_Zxx = np.conjugate(Zxx)
 
-    for i in range(n_bands):
-        Xi = band_complex[i]
-        for j in range(n_bands):
-            idx = sum_idx[i, j]
-            if idx == -1:
-                B_complex[i, j] = 0j
-                logger.debug(f"B[{i},{j}] skipped (target frequency out of range).")
-            else:
-                B_complex[i, j] = np.mean(Xi * band_complex[j] * conj_Zxx[idx])
-                logger.debug(
-                    f"B[{i},{j}] computed using freq idx {idx} "
-                    f"(center={band_centers[i] + band_centers[j]:.2f} Hz)."
-                )
+    def _bispectrum_estimate_task(args: tuple[int, int, np.ndarray]) -> complex:
+        # Bispectrum estimation through triple product
+        i, j, Xi = args
+        idx = sum_idx[i, j]
+        if idx == -1:
+            logger.debug(f"B[{i},{j}] skipped (target frequency out of range).")
+            return 0j
+        value = np.mean(Xi * coeffs[j] * conj_Zxx[idx])
+        logger.debug(
+            f"B[{i},{j}] computed using freq idx {idx} "
+            f"(center={centers[i] + centers[j]:.2f} Hz, "
+            f"{'band-level' if PreprocessingConfig.band_level_bispectrum else 'full'})."
+        )
+        return complex(value)
+
+    bispec_tasks: list[tuple[int, int, np.ndarray]] = [
+        (i, j, coeffs[i]) for i, j in np.ndindex(n_bins, n_bins)
+    ]
+
+    with ThreadPoolExecutor(max_workers=os.cpu_count() or 1) as pool:
+        results: list[complex] = list(pool.map(_bispectrum_estimate_task, bispec_tasks))
+
+    B_complex = np.array(results).reshape(n_bins, n_bins)
 
     B_db = 20.0 * np.log10(np.abs(B_complex) + eps)
     logger.info("Finished computing bispectrum matrices.")

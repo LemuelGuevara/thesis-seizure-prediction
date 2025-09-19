@@ -45,6 +45,7 @@ class PreprocessingConfig:
         "band_level_bispectrum"
     ]
     band_defs: ClassVar[dict[str, list[float]]] = config["preprocessing"]["band_defs"]
+    thread_max_workers: ClassVar[int] = os.cpu_count() or 1
 
 
 @dataclass
