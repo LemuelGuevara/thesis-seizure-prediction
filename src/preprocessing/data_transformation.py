@@ -8,8 +8,8 @@ are the backbone for creating the precomputed STFTS as a whole.
 
 import os
 import time
-from typing import List, Literal, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor
+from typing import List, Literal, Optional, Tuple
 
 import numpy as np
 from mne.io.base import BaseRaw
@@ -380,7 +380,7 @@ def precompute_stfts(
     ]
 
     start = time.perf_counter()
-    with ThreadPoolExecutor(max_workers=8) as pool:
+    with ThreadPoolExecutor(max_workers=os.cpu_count() or 1) as pool:
         results = list(
             tqdm(
                 pool.map(_save_channel_epoch_stft, tasks),
