@@ -48,7 +48,7 @@ def main():
             )
 
             # Initialize model, criterion, optimizer, scaler
-            model = MultimodalSeizureModel().to(device)
+            model = MultimodalSeizureModel(use_cbam=Trainconfig.use_cbam).to(device)
             criterion = nn.CrossEntropyLoss()
             optimizer = optim.Adam(model.parameters(), lr=Trainconfig.lr)
             scaler = GradScaler(device.type)
