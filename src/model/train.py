@@ -10,6 +10,7 @@ from tqdm import tqdm
 from src.config import DataConfig, Trainconfig
 from src.logger import setup_logger
 from src.model.classification.multi_seizure_model import MultimodalSeizureModel
+from src.model.classification.concat_model import ConcatModel
 from src.model.data import create_data_loader, get_loocv_fold, get_paired_dataset
 from src.utils import get_torch_device
 
@@ -48,7 +49,10 @@ def main():
             )
 
             # Initialize model, criterion, optimizer, scaler
-            model = MultimodalSeizureModel(use_cbam=Trainconfig.use_cbam).to(device)
+            if Trainconfig.gated:
+                model = MultimodalSeizureModel(use_cbam=Trainconfig.use_cbam).to(device)
+            else:
+                model = ConcatModel(use_cbam=Trainconfig.use_cbam).to(device)
             criterion = nn.CrossEntropyLoss()
             optimizer = optim.Adam(model.parameters(), lr=Trainconfig.lr)
             scaler = GradScaler(device.type)

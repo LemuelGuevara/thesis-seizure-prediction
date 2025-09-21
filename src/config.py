@@ -103,3 +103,4 @@ class Trainconfig:
     num_epochs: ClassVar[int] = train_toml["num_epochs"]
     lr: ClassVar[float] = train_toml["lr"]
     use_cbam: ClassVar[bool] = train_toml["use_cbam"]
+    gated: ClassVar[bool] = train_toml["gated"]
