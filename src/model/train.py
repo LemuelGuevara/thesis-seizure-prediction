@@ -11,6 +11,7 @@ from src.config import DataConfig, Trainconfig
 from src.logger import setup_logger
 from src.model.classification.multi_seizure_model import MultimodalSeizureModel
 from src.model.data import create_data_loader, get_loocv_fold, get_paired_dataset
+from src.model.early_stopping import EarlyStopping
 from src.utils import get_torch_device
 
 logger = setup_logger(name="train")
@@ -53,6 +54,18 @@ def main():
             optimizer = optim.Adam(model.parameters(), lr=Trainconfig.lr)
             scaler = GradScaler(device.type)
 
+            checkpoint_path = os.path.join(
+                os.path.dirname(__file__),
+                "checkpoints",
+                f"patient{patient_id}_fold{sample_idx}.pt",
+            )
+
+            early_stopping = EarlyStopping(
+                path=checkpoint_path,
+                patience=10,
+                verbose=True,
+            )
+
             # Training
             for epoch in range(Trainconfig.num_epochs):
                 model.train()
@@ -78,12 +91,10 @@ def main():
 
                     epoch_loss += loss.item()
 
-                logger.info(
-                    f"Fold {sample_idx + 1} Epoch {epoch + 1}/{Trainconfig.num_epochs} "
-                    f"- train_loss: {epoch_loss:.4f}"
-                )
+                epoch_loss /= len(train_loader)
 
                 model.eval()
+                val_loss = 0.0
                 with torch.no_grad():
                     for batch_tf, batch_bis, batch_labels in test_loader:
                         batch_tf = batch_tf.to(device, non_blocking=True)
@@ -91,6 +102,8 @@ def main():
                         batch_labels = batch_labels.to(device, non_blocking=True)
 
                         outputs = model(batch_tf, batch_bis)
+                        loss = criterion(outputs, batch_labels)
+                        val_loss += loss.item()
 
                         preds = torch.argmax(outputs, dim=1).cpu().numpy()
                         all_preds.extend(preds)
@@ -98,6 +111,22 @@ def main():
 
                     writer.add_scalar("Loss/train", epoch_loss, epoch)
                     writer.flush()
+                val_loss /= len(test_loader)
+
+                logger.info(
+                    f"Patient {patient_id} Fold {sample_idx + 1} "
+                    f"Epoch {epoch + 1}/{Trainconfig.num_epochs} "
+                    f"- train_loss: {epoch_loss:.4f} - val_loss: {val_loss:.4f}"
+                )
+                writer.add_scalar(f"{patient_id}/Loss/train", epoch_loss, epoch)
+                writer.add_scalar(f"{patient_id}/Loss/val", val_loss, epoch)
+                writer.flush()
+
+                # Apply early stopping to stop overfitting the model
+                early_stopping(val_loss, model)
+                if early_stopping.early_stop:
+                    logger.info("Early stopping triggered.")
+                    break
 
         acc = accuracy_score(all_labels, all_preds)
         rec = recall_score(all_labels, all_preds, average="binary")
