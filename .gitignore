@@ -5,3 +5,5 @@ precomputed_data/
 .vscode
 *.toml
 runs/
+*.stfolder
+checkpoints/
