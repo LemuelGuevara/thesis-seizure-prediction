@@ -1,3 +1,6 @@
+import csv
+import os
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -22,6 +25,8 @@ writer = SummaryWriter()
 def main():
     logger.info(f"Torch device: {device}")
     logger.info("Starting training for all patients")
+
+    loocv_results: list[dict[str, float | str]] = []
 
     for idx in tqdm(range(1, DataConfig.number_of_patients + 1), desc="Patients"):
         patient_id = f"{idx:02d}"
@@ -132,10 +137,29 @@ def main():
         rec = recall_score(all_labels, all_preds, average="binary")
         f1 = f1_score(all_labels, all_preds, average="binary")
 
+        loocv_results.append(
+            {"patient": patient_id, "accuracy": round(acc, 4), "f1-score": round(f1, 4)}
+        )
+
         print("\n===== Final LOOCV Results =====")
         print(f"Accuracy: {acc:.4f}")
         print(f"Recall:   {rec:.4f}")
         print(f"F1 Score: {f1:.4f}")
+
+    patient_dir = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        "runs",
+        "results",
+        f"patient_{patient_id}",
+    )
+    os.makedirs(patient_dir, exist_ok=True)
+    patient_path = os.path.join(patient_dir, "results.csv")
+
+    with open(patient_path, "w", newline="") as results_csv:
+        fieldnames = ["patient", "accuracy", "f1-score"]
+        csv_writer = csv.DictWriter(results_csv, fieldnames=fieldnames)
+        csv_writer.writeheader()
+        csv_writer.writerows(loocv_results)
 
 
 if __name__ == "__main__":
