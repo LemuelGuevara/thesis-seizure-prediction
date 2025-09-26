@@ -16,7 +16,7 @@ from src.logger import setup_logger
 from src.model.classification.multi_seizure_model import MultimodalSeizureModel
 from src.model.data import create_data_loader, get_loocv_fold, get_paired_dataset
 from src.model.early_stopping import EarlyStopping
-from src.utils import get_torch_device
+from src.utils import get_torch_device, set_seed
 
 logger = setup_logger(name="train")
 device = get_torch_device()
@@ -24,6 +24,7 @@ writer = SummaryWriter()
 
 
 def main():
+    set_seed()
     logger.info(f"Torch device: {device}")
     logger.info("Starting training for all patients")
 
