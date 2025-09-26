@@ -1,5 +1,6 @@
 import csv
 import os
+from datetime import datetime
 
 import torch
 import torch.nn as nn
@@ -31,6 +32,17 @@ def main():
     for idx in tqdm(range(1, DataConfig.number_of_patients + 1), desc="Patients"):
         patient_id = f"{idx:02d}"
 
+        timestamp = datetime.now().strftime("%b%d_%H-%M-%S")
+        patient_dir = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            "runs",
+            "results",
+            f"patient_{patient_id}",
+        )
+        os.makedirs(patient_dir, exist_ok=True)
+
+        timestamped_dir = os.path.join(patient_dir, timestamp)
+        os.makedirs(timestamped_dir, exist_ok=True)
         # Get get paired dataset
         tf_features, bis_features, labels = get_paired_dataset(patient_id=patient_id)
         all_preds, all_labels = [], []
