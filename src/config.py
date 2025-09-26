@@ -2,6 +2,7 @@
 Derived config values from config.toml
 """
 
+import json
 import os
 from dataclasses import dataclass
 from typing import ClassVar, Literal
@@ -103,3 +104,8 @@ class Trainconfig:
     num_epochs: ClassVar[int] = train_toml["num_epochs"]
     lr: ClassVar[float] = train_toml["lr"]
     use_cbam: ClassVar[bool] = train_toml["use_cbam"]
+
+
+def output_config_to_json(path: str) -> None:
+    with open(path, "w") as f:
+        json.dump(config, f, indent=4)
