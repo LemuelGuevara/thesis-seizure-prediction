@@ -4,8 +4,11 @@ Functions that can be resued as utility to other modules.
 
 import os
 import platform
+import random
+from dataclasses import fields
 from datetime import datetime, timedelta
 
+import numpy as np
 import toml
 import torch
 
@@ -74,3 +77,18 @@ def get_torch_device() -> torch.device:
         return torch.device("mps")
     else:
         return torch.device("cpu")
+
+
+def set_seed(seed: int = 42) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)  # if you are using multi-GPU
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
+def classvars_to_dict(cls):
+    """Extract ClassVar attributes from a dataclass class."""
+    return {f.name: getattr(cls, f.name) for f in fields(cls) if hasattr(cls, f.name)}
