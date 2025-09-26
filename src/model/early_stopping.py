@@ -2,6 +2,10 @@ import os
 
 import torch
 
+from src.logger import setup_logger
+
+logger = setup_logger(name="early_stopping")
+
 
 class EarlyStopping:
     def __init__(self, path, patience=7, min_delta=0, verbose=False):
@@ -44,7 +48,7 @@ class EarlyStopping:
 
     def save_checkpoint(self, val_loss, model):
         if self.verbose:
-            print(
+            logger.info(
                 f"Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}). Saving model..."
             )
         torch.save(model.state_dict(), self.path)
