@@ -1,11 +1,11 @@
 import torch.nn as nn
 from torch import Tensor
+from torchvision.models import EfficientNet_B0_Weights, efficientnet_b0
 
 from src.config import MultiSeizureModelConfig
 from src.model.classification.efficientnet import EfficientNetWithCBAM
 from src.model.fusion.attention_pooling import AttentionPooling
 from src.model.fusion.gated_fusion import GatedFusion1D
-from torchvision.models import EfficientNet_B0_Weights, efficientnet_b0
 
 
 class MultimodalSeizureModel(nn.Module):
@@ -13,15 +13,18 @@ class MultimodalSeizureModel(nn.Module):
         self,
         feature_dim=MultiSeizureModelConfig.feature_dim,
         num_classes=MultiSeizureModelConfig.num_clsses,
-        use_cbam=True
+        use_cbam=True,
     ):
         super(MultimodalSeizureModel, self).__init__()
         if use_cbam:
             self.tf_encoder = EfficientNetWithCBAM()
             self.bis_encoder = EfficientNetWithCBAM()
         else:
-            self.tf_encoder = efficientnet_b0(weights=EfficientNet_B0_Weights.DEFAULT)
-            self.bis_encoder = efficientnet_b0(weights=EfficientNet_B0_Weights.DEFAULT)
+            tf_base = efficientnet_b0(weights=EfficientNet_B0_Weights.DEFAULT)
+            bis_base = efficientnet_b0(weights=EfficientNet_B0_Weights.DEFAULT)
+            self.tf_encoder = tf_base.features
+            self.bis_encoder = bis_base.features
+
         self.fusion = GatedFusion1D(channel_dim=feature_dim)
         self.attention_pool = AttentionPooling(
             in_dim=feature_dim, num_classes=num_classes
