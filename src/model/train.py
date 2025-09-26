@@ -44,6 +44,7 @@ def main():
 
         timestamped_dir = os.path.join(patient_dir, timestamp)
         os.makedirs(timestamped_dir, exist_ok=True)
+        patient_results_csv_path = os.path.join(timestamped_dir, "results.csv")
         config_path = os.path.join(timestamped_dir, "config.json")
         output_config_to_json(config_path)
         # Get get paired dataset
@@ -153,7 +154,12 @@ def main():
         f1 = f1_score(all_labels, all_preds, average="binary")
 
         loocv_results.append(
-            {"patient": patient_id, "accuracy": round(acc, 4), "f1-score": round(f1, 4)}
+            {
+                "patient": patient_id,
+                "recall": round(rec, 4),
+                "accuracy": round(acc, 4),
+                "f1-score": round(f1, 4),
+            }
         )
 
         print("\n===== Final LOOCV Results =====")
@@ -161,20 +167,11 @@ def main():
         print(f"Recall:   {rec:.4f}")
         print(f"F1 Score: {f1:.4f}")
 
-    patient_dir = os.path.join(
-        os.path.dirname(os.path.dirname(__file__)),
-        "runs",
-        "results",
-        f"patient_{patient_id}",
-    )
-    os.makedirs(patient_dir, exist_ok=True)
-    patient_path = os.path.join(patient_dir, "results.csv")
-
-    with open(patient_path, "w", newline="") as results_csv:
-        fieldnames = ["patient", "accuracy", "f1-score"]
-        csv_writer = csv.DictWriter(results_csv, fieldnames=fieldnames)
-        csv_writer.writeheader()
-        csv_writer.writerows(loocv_results)
+        with open(patient_results_csv_path, "w", newline="") as results_csv:
+            fieldnames = ["patient", "accuracy", "recall", "f1-score"]
+            csv_writer = csv.DictWriter(results_csv, fieldnames=fieldnames)
+            csv_writer.writeheader()
+            csv_writer.writerows(loocv_results)
 
 
 if __name__ == "__main__":
