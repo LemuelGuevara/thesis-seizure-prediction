@@ -44,9 +44,12 @@ def main():
 
         timestamped_dir = os.path.join(patient_dir, timestamp)
         os.makedirs(timestamped_dir, exist_ok=True)
+
         patient_results_csv_path = os.path.join(timestamped_dir, "results.csv")
+
         config_path = os.path.join(timestamped_dir, "config.json")
         output_config_to_json(config_path)
+
         # Get get paired dataset
         tf_features, bis_features, labels = get_paired_dataset(patient_id=patient_id)
         all_preds, all_labels = [], []
