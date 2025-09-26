@@ -11,7 +11,7 @@ from torch.utils.data import TensorDataset
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from src.config import DataConfig, Trainconfig
+from src.config import DataConfig, Trainconfig, output_config_to_json
 from src.logger import setup_logger
 from src.model.classification.multi_seizure_model import MultimodalSeizureModel
 from src.model.data import create_data_loader, get_loocv_fold, get_paired_dataset
@@ -43,6 +43,8 @@ def main():
 
         timestamped_dir = os.path.join(patient_dir, timestamp)
         os.makedirs(timestamped_dir, exist_ok=True)
+        config_path = os.path.join(timestamped_dir, "config.json")
+        output_config_to_json(config_path)
         # Get get paired dataset
         tf_features, bis_features, labels = get_paired_dataset(patient_id=patient_id)
         all_preds, all_labels = [], []
