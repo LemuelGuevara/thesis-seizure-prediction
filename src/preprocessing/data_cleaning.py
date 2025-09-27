@@ -186,7 +186,9 @@ def load_raw_recordings(patient_id: str) -> list[BaseRaw]:
             recording_path = os.path.join(root, file)
             logger.debug(f"Reading file: {file}")
 
-            raw_edf = mne.io.read_raw_edf(recording_path, preload=True, verbose="error")
+            raw_edf = mne.io.read_raw_edf(
+                recording_path, preload=False, verbose="error"
+            )
             raw_edf.pick(
                 PreprocessingConfig.selected_channels
             )  # only keep channels defined in config
