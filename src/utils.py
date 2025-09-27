@@ -2,11 +2,12 @@
 Functions that can be resued as utility to other modules.
 """
 
+import csv
 import os
 import platform
 import random
-from dataclasses import fields
 from datetime import datetime, timedelta
+from typing import Any
 
 import numpy as np
 import toml
@@ -43,10 +44,14 @@ def parse_time_str(time_str: str) -> datetime:
     hour = int(parts[0])
     minute = int(parts[1])
     second = int(parts[2])
-    if hour == 24:
-        return datetime.min.replace(hour=0, minute=minute, second=second) + timedelta(
-            days=1
-        )
+
+    if hour >= 24:
+        # Calculate how many days to add
+        days_to_add = hour // 24
+        normalized_hour = hour % 24
+        return datetime.min.replace(
+            hour=normalized_hour, minute=minute, second=second
+        ) + timedelta(days=days_to_add)
     else:
         return datetime.min.replace(hour=hour, minute=minute, second=second)
 
@@ -89,6 +94,8 @@ def set_seed(seed: int = 42) -> None:
     torch.backends.cudnn.benchmark = False
 
 
-def classvars_to_dict(cls):
-    """Extract ClassVar attributes from a dataclass class."""
-    return {f.name: getattr(cls, f.name) for f in fields(cls) if hasattr(cls, f.name)}
+def export_to_csv(path: str, fieldnames: list[str], data: Any) -> None:
+    with open(path, "w", newline="") as f:
+        csv_writer = csv.DictWriter(f, fieldnames=fieldnames)
+        csv_writer.writeheader()
+        csv_writer.writerows(data)
