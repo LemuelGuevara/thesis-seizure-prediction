@@ -106,15 +106,15 @@ def main():
                     segmented_intervals=segmented_intervals,
                 )
 
-            # --- Always append to summary regardless of skip or not ---
-            precomputed_stfts_summary.append(
-                {
-                    "patient_index": idx,
-                    "number_of_seizures": len(ictal_intervals),
-                    "preictal_intervals": phase_counts.get("preictal", 0),
-                    "interictal_intervals": phase_counts.get("interictal", 0),
-                }
-            )
+                # --- Always append to summary regardless of skip or not ---
+                precomputed_stfts_summary.append(
+                    {
+                        "patient_index": idx,
+                        "number_of_seizures": len(ictal_intervals),
+                        "preictal_intervals": phase_counts.get("preictal", 0),
+                        "interictal_intervals": phase_counts.get("interictal", 0),
+                    }
+                )
 
     # Write to csv the summarized patient precomputed stfts
     precomputed_stfts_summary_path = os.path.join(
