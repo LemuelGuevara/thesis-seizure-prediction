@@ -288,7 +288,7 @@ def precompute_stfts(
     segmented_intervals: List[EpochInterval],
     normalize_power: bool = False,
     normalization_method: str = "minmax",
-):
+) -> dict[str, int]:
     """
     Precomputes Short-Time Fourier Transform (STFT) representations for all labeled epochs
     and all selected channels in a single patient recording.
@@ -358,7 +358,7 @@ def precompute_stfts(
         if not os.path.exists(filename):
             data = recording.get_data(
                 picks=[idx_ch], start=start_sample, stop=end_sample
-            )
+            ).astype(np.float32)
             data_2d = np.asarray(data)
 
             computed_stft = compute_stft_for_segment(
@@ -380,26 +380,29 @@ def precompute_stfts(
     ]
 
     start = time.perf_counter()
+    total_created = 0
+
     with ThreadPoolExecutor(max_workers=os.cpu_count() or 1) as pool:
-        results = list(
-            tqdm(
-                pool.map(_save_channel_epoch_stft, tasks),
-                total=len(tasks),
-                desc="Computing STFTs",
-            )
-        )
+        for ok in tqdm(
+            pool.map(_save_channel_epoch_stft, tasks),
+            total=len(segmented_intervals),
+            desc="Computing STFTs",
+        ):
+            if ok:
+                total_created += 1
 
     elapsed = time.perf_counter() - start
+    avg_speed = len(tasks) / elapsed
 
-    total_tasks = len(tasks)
-    avg_speed = total_tasks / elapsed
     logger.debug(f"Average speed: {avg_speed:.2f} it/s")
     logger.info("STFT precomputation completed successfully!")
     logger.info(
-        f"Processed {len(results)} STFT epochs across {len(channel_names)} channels"
+        f"Processed {len(tasks)} STFT epochs across {len(channel_names)} channels"
     )
-    logger.info(f"Total STFT files created: {sum(results)}")
+    logger.info(f"Total STFT files created: {total_created}")
     logger.info(f"Results saved in: {patient_stfts_dir}")
+
+    return phase_counts
 
 
 def build_epoch_mosaic(
