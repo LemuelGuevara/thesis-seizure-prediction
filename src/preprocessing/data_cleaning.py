@@ -99,6 +99,7 @@ def extract_seizure_intervals(
             pending_seizure_start = None
 
     assert file_start is not None, "file_start cannot be None"
+    assert file_end is not None, "file_end cannot be None"
 
     current_start = file_start
     for seizure_idx, seizure in enumerate(ictal_intervals, 1):
