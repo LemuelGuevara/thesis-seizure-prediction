@@ -37,3 +37,11 @@ class StftStore(EpochInterval):
 class BandTimeStore(EpochInterval):
     band_time: np.ndarray  # shape: (n_bands, n_times)
     times: np.ndarray
+
+
+@dataclass
+class PrecomputedStftSummary:
+    patient_index: int
+    number_of_seizures: int
+    preictal_intervals: int
+    interictal_intervals: int
