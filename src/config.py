@@ -24,6 +24,7 @@ class DataConfig:
         )
     )
     number_of_patients: ClassVar[int] = config["data"]["number_of_patients"]
+    patient_to_process: ClassVar[int] = config["data"]["patient_to_process"]
 
 
 @dataclass
