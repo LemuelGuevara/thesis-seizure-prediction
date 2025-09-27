@@ -68,7 +68,7 @@ def get_loocv_fold(
     bis_features: np.ndarray,
     labels: np.ndarray,
     sample_idx: int,
-    undersample: bool=False
+    undersample: bool,
 ) -> tuple[tuple[Tensor, Tensor, Tensor], tuple[Tensor, Tensor, Tensor]]:
     """
     Creates split train and test data through leave-one-out cross-validation (LOOCV)
@@ -100,11 +100,14 @@ def get_loocv_fold(
         minority_class = min(class_counts, key=class_counts.get)
         minority_count = class_counts[minority_class]
 
-        indices_by_class = {label: np.where(labels_train == label)[0] for label in unique}
+        indices_by_class = {
+            label: np.where(labels_train == label)[0] for label in unique
+        }
 
-        np.random.seed(42)
         sampled_indices = list(indices_by_class[minority_class]) + list(
-            np.random.choice(indices_by_class[1 - minority_class], size=minority_count, replace=False)
+            np.random.choice(
+                indices_by_class[1 - minority_class], size=minority_count, replace=False
+            )
         )
         np.random.shuffle(sampled_indices)
 
