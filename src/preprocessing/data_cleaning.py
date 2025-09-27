@@ -7,6 +7,7 @@ passing them to time-frequency and bispectrum processing.
 """
 
 import os
+import re
 import sys
 import typing
 from datetime import timedelta
@@ -66,37 +67,38 @@ def extract_seizure_intervals(
         # which will be used to find the preictals and interictals.
 
         line = line.strip()
-        if line.startswith("File Start Time:"):
+
+        if line.startswith("File Name:"):
+            file_name = line.split(":", 1)[1].strip()
+        elif line.startswith("File Start Time:"):
             file_start = parse_time_str(line.split(":", 1)[1].strip())
         elif line.startswith("File End Time:"):
             file_end = parse_time_str(line.split(":", 1)[1].strip())
-        elif line.startswith("Number of Seizures in File: "):
-            assert file_start is not None, "file_start cannot be None"
-            assert file_end is not None, "file_end cannot be None"
-
-            no_of_seizures = int(line.split(":")[1].strip().split()[0])
-            recording_limit = 3600  # in seconds (1hr)
-
+        elif line.startswith("Number of Seizures in File:"):
+            no_of_seizures = int(line.split(":", 1)[1].strip().split()[0])
             if no_of_seizures == 0:
                 interictal_intervals.append(
                     EpochInterval(
                         phase="interictal",
                         start=0,
-                        end=recording_limit,
+                        end=3600,
                     )
                 )
+        else:
+            # Match any seizure line: "Seizure 1 Start Time:", "Seizure 2 End Time:"
+            m_start = re.match(r"Seizure \d+ Start Time:", line)
+            m_end = re.match(r"Seizure \d+ End Time:", line)
 
-        elif line.startswith("Seizure Start Time:"):
-            pending_seizure_start = int(line.split(":")[1].strip().split()[0])
-        elif line.startswith("Seizure End Time:"):
-            end_sec = int(float(line.split(":", 1)[1].strip().split()[0]))
-            if pending_seizure_start is not None:
+            if m_start:
+                pending_seizure_start = int(line.split(":")[1].strip().split()[0])
+            elif m_end and pending_seizure_start is not None:
+                end_sec = int(float(line.split(":", 1)[1].strip().split()[0]))
                 ictal_intervals.append(
                     EpochInterval(
                         phase="ictal", start=pending_seizure_start, end=end_sec
                     )
                 )
-            pending_seizure_start = None
+                pending_seizure_start = None
 
     assert file_start is not None, "file_start cannot be None"
     assert file_end is not None, "file_end cannot be None"
