@@ -73,6 +73,7 @@ def main():
                     bis_features=bis_features,
                     labels=labels,
                     sample_idx=sample_idx,
+                    undersample=Trainconfig.undersample
                 )
             )
 

@@ -68,6 +68,7 @@ def get_loocv_fold(
     bis_features: np.ndarray,
     labels: np.ndarray,
     sample_idx: int,
+    undersample: bool=False
 ) -> tuple[tuple[Tensor, Tensor, Tensor], tuple[Tensor, Tensor, Tensor]]:
     """
     Creates split train and test data through leave-one-out cross-validation (LOOCV)
@@ -76,6 +77,7 @@ def get_loocv_fold(
         tf_features (np.ndarray): Numpy array of time-frequency features
         bis_features (np.ndarray): Numpy array of bispectrum features
         labels (np.ndarray): Numpy array of feature labels (0 = interictal, 1 = preictal)
+        undersample: if True, applies random undersampling
 
     Returns:
         tuple[tuple[Tensor, Tensor, Tensor], tuple[Tensor, Tensor, Tensor]]:
@@ -86,13 +88,38 @@ def get_loocv_fold(
         f"Fold {sample_idx + 1} / {len(tf_features)} (leaving out sample {sample_idx})"
     )
 
-    tf_train = torch.tensor(
-        np.delete(tf_features, sample_idx, axis=0), dtype=torch.float32
-    ).permute(0, 3, 1, 2)
-    bis_train = torch.tensor(
-        np.delete(bis_features, sample_idx, axis=0), dtype=torch.float32
-    ).permute(0, 3, 1, 2)
-    labels_train = torch.tensor(np.delete(labels, sample_idx, axis=0), dtype=torch.long)
+    tf_train = np.delete(tf_features, sample_idx, axis=0)
+    bis_train = np.delete(bis_features, sample_idx, axis=0)
+    labels_train = np.delete(labels, sample_idx, axis=0)
+
+    if undersample:
+        logger.info("Applying undersampling to training set")
+
+        unique, counts = np.unique(labels_train, return_counts=True)
+        class_counts = dict(zip(unique, counts))
+        minority_class = min(class_counts, key=class_counts.get)
+        minority_count = class_counts[minority_class]
+
+        indices_by_class = {label: np.where(labels_train == label)[0] for label in unique}
+
+        np.random.seed(42)
+        sampled_indices = list(indices_by_class[minority_class]) + list(
+            np.random.choice(indices_by_class[1 - minority_class], size=minority_count, replace=False)
+        )
+        np.random.shuffle(sampled_indices)
+
+        tf_train = tf_train[sampled_indices]
+        bis_train = bis_train[sampled_indices]
+        labels_train = labels_train[sampled_indices]
+
+        logger.info(f"Original training set class distribution: {class_counts}")
+        unique_new, counts_new = np.unique(labels_train, return_counts=True)
+        new_class_counts = dict(zip(unique_new, counts_new))
+        logger.info(f"Undersampled training set class distribution: {new_class_counts}")
+
+    tf_train = torch.tensor(tf_train, dtype=torch.float32).permute(0, 3, 1, 2)
+    bis_train = torch.tensor(bis_train, dtype=torch.float32).permute(0, 3, 1, 2)
+    labels_train = torch.tensor(labels_train, dtype=torch.long)
 
     tf_test = (
         torch.tensor(tf_features[sample_idx], dtype=torch.float32)
