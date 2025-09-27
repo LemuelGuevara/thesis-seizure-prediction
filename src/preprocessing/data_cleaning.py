@@ -70,6 +70,22 @@ def extract_seizure_intervals(
             file_start = parse_time_str(line.split(":", 1)[1].strip())
         elif line.startswith("File End Time:"):
             file_end = parse_time_str(line.split(":", 1)[1].strip())
+        elif line.startswith("Number of Seizures in File: "):
+            assert file_start is not None, "file_start cannot be None"
+            assert file_end is not None, "file_end cannot be None"
+
+            no_of_seizures = int(line.split(":")[1].strip().split()[0])
+            recording_limit = 3600  # in seconds (1hr)
+
+            if no_of_seizures == 0:
+                interictal_intervals.append(
+                    EpochInterval(
+                        phase="interictal",
+                        start=0,
+                        end=recording_limit,
+                    )
+                )
+
         elif line.startswith("Seizure Start Time:"):
             pending_seizure_start = int(line.split(":")[1].strip().split()[0])
         elif line.startswith("Seizure End Time:"):
