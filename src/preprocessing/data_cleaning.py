@@ -236,7 +236,6 @@ def load_patient_recording(patient_id: str) -> BaseRaw:
     Loads and preprocesses a patient's EEG recordings
     - Reads EDFs
     - Concatenates them
-    - Applies filters
 
     Args:
         patient_id (str): Patient ID (e.g. "01")
@@ -249,11 +248,11 @@ def load_patient_recording(patient_id: str) -> BaseRaw:
 
     # Concatenate all files into one continuous recording
     logger.info("Concatenating EDF files")
-    raw_concatenated: BaseRaw = cast(BaseRaw, mne.concatenate_raws(raw_edf_list))
+    raw_concatenated: BaseRaw = cast(
+        BaseRaw, mne.concatenate_raws(raw_edf_list, preload=False)
+    )
 
-    # Apply filtering
-    raw_filtered = apply_filters(raw_concatenated)
-    return raw_filtered
+    return raw_concatenated
 
 
 # 3. Preprocessing: Segmentation into epochs
