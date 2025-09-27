@@ -45,6 +45,14 @@ def main():
         timestamped_dir = os.path.join(patient_dir, timestamp)
         os.makedirs(timestamped_dir, exist_ok=True)
 
+        checkpoint_path = os.path.join(
+            os.path.dirname(__file__),
+            "checkpoints",
+            f"patient_{patient_id}.pt",
+        )
+
+        os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
+
         patient_results_csv_path = os.path.join(timestamped_dir, "results.csv")
 
         config_path = os.path.join(timestamped_dir, "config.json")
@@ -53,6 +61,9 @@ def main():
         # Get get paired dataset
         tf_features, bis_features, labels = get_paired_dataset(patient_id=patient_id)
         all_preds, all_labels = [], []
+
+        # Tracker for the best val loss for each patient
+        patient_best_val_loss = float("inf")
 
         for sample_idx in tqdm(range(len(tf_features)), desc="Samples"):
             # Split train/test data through loocv
@@ -77,18 +88,7 @@ def main():
             criterion = nn.CrossEntropyLoss()
             optimizer = optim.Adam(model.parameters(), lr=Trainconfig.lr)
             scaler = GradScaler(device.type)
-
-            checkpoint_path = os.path.join(
-                os.path.dirname(__file__),
-                "checkpoints",
-                f"patient{patient_id}_fold{sample_idx}.pt",
-            )
-
-            early_stopping = EarlyStopping(
-                path=checkpoint_path,
-                patience=10,
-                verbose=True,
-            )
+            early_stopping = EarlyStopping()
 
             # Training
             for epoch in range(Trainconfig.num_epochs):
@@ -137,6 +137,17 @@ def main():
                     writer.flush()
                 val_loss /= len(test_loader)
 
+                # Apply early stopping to stop overfitting the model
+                early_stopping(val_loss, model)
+                if early_stopping.best_score is not None:
+                    fold_best_val = -float(early_stopping.best_score)
+                    if fold_best_val < patient_best_val_loss:
+                        patient_best_val = fold_best_val
+                        torch.save(model.state_dict(), checkpoint_path)
+
+                if early_stopping.early_stop:
+                    break
+
                 logger.info(
                     f"Patient {patient_id} Fold {sample_idx + 1} "
                     f"Epoch {epoch + 1}/{Trainconfig.num_epochs} "
@@ -145,12 +156,6 @@ def main():
                 writer.add_scalar(f"{patient_id}/Loss/train", epoch_loss, epoch)
                 writer.add_scalar(f"{patient_id}/Loss/val", val_loss, epoch)
                 writer.flush()
-
-                # Apply early stopping to stop overfitting the model
-                early_stopping(val_loss, model)
-                if early_stopping.early_stop:
-                    logger.info("Early stopping triggered.")
-                    break
 
         acc = accuracy_score(all_labels, all_preds)
         rec = recall_score(all_labels, all_preds, average="binary")
