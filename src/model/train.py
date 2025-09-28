@@ -65,6 +65,8 @@ def main():
         # # Normalize to float16 [0, 1]
         tf_features = tf_features.astype(np.float16) / 255.0
         bis_features = bis_features.astype(np.float16) / 255.0
+        labels = labels.astype(np.int8)
+
         logger.info(
             f"Normalized features: {{tf: {tf_features.dtype}, {tf_features.min():.4f}-{tf_features.max():.4f}; "
             f"bis: {bis_features.dtype}, {bis_features.min():.4f}-{bis_features.max():.4f}}}"
