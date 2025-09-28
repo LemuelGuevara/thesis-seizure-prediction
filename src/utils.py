@@ -3,11 +3,12 @@ Functions that can be resued as utility to other modules.
 """
 
 import csv
+import json
 import os
 import platform
 import random
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Literal, Optional
 
 import numpy as np
 import toml
@@ -94,8 +95,32 @@ def set_seed(seed: int = 42) -> None:
     torch.backends.cudnn.benchmark = False
 
 
-def export_to_csv(path: str, fieldnames: list[str], data: Any) -> None:
-    with open(path, "w", newline="") as f:
-        csv_writer = csv.DictWriter(f, fieldnames=fieldnames)
-        csv_writer.writeheader()
-        csv_writer.writerows(data)
+def export_to_csv(
+    path: str,
+    fieldnames: list[str],
+    data: list[dict[str, Any]],
+    mode: Literal["w", "a"] = "w",
+    json_metadata: Optional[tuple[str, Any]] = None,
+) -> None:
+    file_exists = os.path.isfile(path)
+
+    # Add metadata column name to fieldnames if provided
+    if json_metadata is not None:
+        meta_column_name, meta_value = json_metadata
+        if meta_column_name not in fieldnames:
+            fieldnames = fieldnames + [meta_column_name]
+
+    with open(path, mode, newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+
+        if mode == "w" or not file_exists:
+            writer.writeheader()
+
+        for row in data:
+            row_to_write = row.copy()
+
+            if json_metadata is not None:
+                meta_column_name, meta_value = json_metadata
+                row_to_write[meta_column_name] = json.dumps(meta_value)
+
+            writer.writerow(row_to_write)
