@@ -23,8 +23,7 @@ class DataConfig:
             os.path.dirname(__file__), "..", config["data"]["precomputed_data_path"]
         )
     )
-    number_of_patients: ClassVar[int] = config["data"]["number_of_patients"]
-    patient_to_process: ClassVar[int] = config["data"]["patient_to_process"]
+    patients_to_process: ClassVar[list[int]] = config["data"]["patients_to_process"]
 
 
 @dataclass

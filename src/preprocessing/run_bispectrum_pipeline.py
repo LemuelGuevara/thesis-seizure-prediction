@@ -38,8 +38,8 @@ def main():
         - Save to npz
     """
     with logging_redirect_tqdm(loggers=active_loggers):
-        for idx in tqdm(range(1, DataConfig.number_of_patients + 1), desc="Patients"):
-            patient_id = f"{idx:02d}"
+        for patient in tqdm(DataConfig.patients_to_process, desc="Patients"):
+            patient_id = f"{patient:02d}"
             logger.info(f"Processing patient {patient_id}")
 
             patient_stfts_dir = os.path.join(

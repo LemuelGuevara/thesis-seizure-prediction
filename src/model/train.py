@@ -30,8 +30,8 @@ def main():
 
     loocv_results: list[dict[str, float | str]] = []
 
-    for idx in tqdm(range(1, DataConfig.number_of_patients + 1), desc="Patients"):
-        patient_id = f"{idx:02d}"
+    for patient in tqdm(DataConfig.patients_to_process, desc="Patients"):
+        patient_id = f"{patient:02d}"
 
         timestamp = datetime.now().strftime("%b%d_%H-%M-%S")
         patient_dir = os.path.join(
@@ -73,7 +73,7 @@ def main():
                     bis_features=bis_features,
                     labels=labels,
                     sample_idx=sample_idx,
-                    undersample=Trainconfig.undersample
+                    undersample=Trainconfig.undersample,
                 )
             )
 
