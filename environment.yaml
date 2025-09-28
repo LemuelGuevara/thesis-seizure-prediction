@@ -16,3 +16,4 @@ dependencies:
   - torchvision
   - pytorch-gpu
   - tensorboard
+  - prettytable

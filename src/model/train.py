@@ -1,4 +1,3 @@
-import csv
 import os
 from datetime import datetime
 
@@ -6,18 +5,19 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from prettytable import PrettyTable
 from sklearn.metrics import accuracy_score, f1_score, recall_score
 from torch.amp import GradScaler, autocast
 from torch.utils.data import TensorDataset
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from src.config import DataConfig, Trainconfig, output_config_to_json
+from src.config import DataConfig, Trainconfig, config
 from src.logger import setup_logger
 from src.model.classification.multi_seizure_model import MultimodalSeizureModel
 from src.model.data import create_data_loader, get_loocv_fold, get_paired_dataset
 from src.model.early_stopping import EarlyStopping
-from src.utils import get_torch_device, set_seed
+from src.utils import export_to_csv, get_torch_device, set_seed
 
 logger = setup_logger(name="train")
 device = get_torch_device()
@@ -34,18 +34,6 @@ def main():
     for patient in tqdm(DataConfig.patients_to_process, desc="Patients"):
         patient_id = f"{patient:02d}"
 
-        timestamp = datetime.now().strftime("%b%d_%H-%M-%S")
-        patient_dir = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            "runs",
-            "results",
-            f"patient_{patient_id}",
-        )
-        os.makedirs(patient_dir, exist_ok=True)
-
-        timestamped_dir = os.path.join(patient_dir, timestamp)
-        os.makedirs(timestamped_dir, exist_ok=True)
-
         checkpoint_path = os.path.join(
             os.path.dirname(__file__),
             "checkpoints",
@@ -53,11 +41,6 @@ def main():
         )
 
         os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
-
-        patient_results_csv_path = os.path.join(timestamped_dir, "results.csv")
-
-        config_path = os.path.join(timestamped_dir, "config.json")
-        output_config_to_json(config_path)
 
         # Get get paired dataset
         tf_features, bis_features, labels = get_paired_dataset(patient_id=patient_id)
@@ -174,25 +157,48 @@ def main():
         rec = recall_score(all_labels, all_preds, average="binary")
         f1 = f1_score(all_labels, all_preds, average="binary")
 
+        loocv_result_fieldnames = [
+            "patient",
+            "run_timestamp",
+            "recall",
+            "accuracy",
+            "f1-score",
+        ]
+
+        timestamp = datetime.now().strftime("%b%d_%H-%M-%S")
+
+        # Show results of loocv in table format
+        table = PrettyTable()
+        table.field_names = loocv_result_fieldnames
+        table.title = f"Patient {patient_id} LOOCV Results"
+        table.add_row([patient_id, timestamp, f"{acc:.4f}", f"{rec:.4f}", f"{f1:.4f}"])
+        print(f"\n{table}")
+
         loocv_results.append(
             {
                 "patient": patient_id,
+                "run_timestamp": timestamp,
                 "recall": round(rec, 4),
                 "accuracy": round(acc, 4),
                 "f1-score": round(f1, 4),
+                "config": config,
             }
         )
 
-        print("\n===== Final LOOCV Results =====")
-        print(f"Accuracy: {acc:.4f}")
-        print(f"Recall:   {rec:.4f}")
-        print(f"F1 Score: {f1:.4f}")
+        # Save all results of each patient in csv file
+        all_patients_results_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            "runs",
+            "all_patients_results.csv",
+        )
 
-        with open(patient_results_csv_path, "w", newline="") as results_csv:
-            fieldnames = ["patient", "accuracy", "recall", "f1-score"]
-            csv_writer = csv.DictWriter(results_csv, fieldnames=fieldnames)
-            csv_writer.writeheader()
-            csv_writer.writerows(loocv_results)
+        export_to_csv(
+            path=all_patients_results_path,
+            fieldnames=loocv_result_fieldnames,
+            data=loocv_results,
+            mode="a",
+            json_metadata=("config", config),
+        )
 
 
 if __name__ == "__main__":
