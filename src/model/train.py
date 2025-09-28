@@ -2,6 +2,7 @@ import csv
 import os
 from datetime import datetime
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -60,6 +61,15 @@ def main():
 
         # Get get paired dataset
         tf_features, bis_features, labels = get_paired_dataset(patient_id=patient_id)
+
+        # # Normalize to float16 [0, 1]
+        tf_features = tf_features.astype(np.float16) / 255.0
+        bis_features = bis_features.astype(np.float16) / 255.0
+        logger.info(
+            f"Normalized features: {{tf: {tf_features.dtype}, {tf_features.min():.4f}-{tf_features.max():.4f}; "
+            f"bis: {bis_features.dtype}, {bis_features.min():.4f}-{bis_features.max():.4f}}}"
+        )
+
         all_preds, all_labels = [], []
 
         # Tracker for the best val loss for each patient
