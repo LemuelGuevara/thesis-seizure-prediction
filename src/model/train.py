@@ -64,7 +64,8 @@ def main():
                     bis_features=bis_features,
                     labels=labels,
                     sample_idx=sample_idx,
-                    undersample=Trainconfig.undersample,
+                    undersample=Trainconfig.undersample
+                    and not Trainconfig.class_weighting,
                 )
             )
 
@@ -80,7 +81,19 @@ def main():
                 model = MultimodalSeizureModel(use_cbam=Trainconfig.use_cbam).to(device)
             else:
                 model = ConcatModel(use_cbam=Trainconfig.use_cbam).to(device)
-            criterion = nn.CrossEntropyLoss()
+
+            if Trainconfig.class_weighting:
+                unique_labels, counts = torch.unique(labels_train, return_counts=True)
+                class_frequencies = counts / len(labels_train)
+                class_weights = 1.0 / class_frequencies
+                class_weights = (1.0 / class_frequencies).float().to(device)
+
+                logger.info(f"Using class weights: {class_weights}")
+
+                criterion = nn.CrossEntropyLoss(weight=class_weights)
+            else:
+                criterion = nn.CrossEntropyLoss()
+
             optimizer = optim.Adam(model.parameters(), lr=Trainconfig.lr)
             scaler = GradScaler(device.type)
             early_stopping = EarlyStopping()
