@@ -1,7 +1,6 @@
 import os
 from datetime import datetime
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -14,8 +13,8 @@ from tqdm import tqdm
 
 from src.config import DataConfig, Trainconfig, config
 from src.logger import setup_logger
-from src.model.classification.multi_seizure_model import MultimodalSeizureModel
 from src.model.classification.concat_model import ConcatModel
+from src.model.classification.multi_seizure_model import MultimodalSeizureModel
 from src.model.data import create_data_loader, get_loocv_fold, get_paired_dataset
 from src.model.early_stopping import EarlyStopping
 from src.utils import export_to_csv, get_torch_device, set_seed
@@ -35,6 +34,7 @@ def main():
     for patient in tqdm(DataConfig.patients_to_process, desc="Patients"):
         patient_id = f"{patient:02d}"
 
+        timestamp = datetime.now().strftime("%b%d_%H-%M-%S")
         checkpoint_path = os.path.join(
             os.path.dirname(__file__),
             "checkpoints",
@@ -171,24 +171,34 @@ def main():
 
         loocv_result_fieldnames = [
             "patient",
+            "setup_name",
             "run_timestamp",
             "recall",
             "accuracy",
             "f1-score",
         ]
 
-        timestamp = datetime.now().strftime("%b%d_%H-%M-%S")
-
         # Show results of loocv in table format
         table = PrettyTable()
         table.field_names = loocv_result_fieldnames
         table.title = f"Patient {patient_id} LOOCV Results"
-        table.add_row([patient_id, timestamp, f"{acc:.4f}", f"{rec:.4f}", f"{f1:.4f}"])
+        table.add_row(
+            [
+                patient_id,
+                Trainconfig.setup_name,
+                timestamp,
+                f"{acc:.4f}",
+                f"{rec:.4f}",
+                f"{f1:.4f}",
+            ]
+        )
+        print("\nREMINDER: BALIKTAD ANG RECALL AT ACCURACY COLUMN!!!")
         print(f"\n{table}")
 
         loocv_results.append(
             {
                 "patient": patient_id,
+                "setup_name": Trainconfig.setup_name,
                 "run_timestamp": timestamp,
                 "recall": round(rec, 4),
                 "accuracy": round(acc, 4),
