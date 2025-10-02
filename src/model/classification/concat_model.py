@@ -20,8 +20,10 @@ class ConcatModel(nn.Module):
             self.tf_encoder = EfficientNetWithCBAM()
             self.bis_encoder = EfficientNetWithCBAM()
         else:
-            self.tf_encoder = efficientnet_b0(weights=EfficientNet_B0_Weights.DEFAULT)
-            self.bis_encoder = efficientnet_b0(weights=EfficientNet_B0_Weights.DEFAULT)
+            base_tf = efficientnet_b0(weights=EfficientNet_B0_Weights.DEFAULT)
+            base_bis = efficientnet_b0(weights=EfficientNet_B0_Weights.DEFAULT)
+            self.tf_encoder = base_tf.features  # returns [B, C, H, W]
+            self.bis_encoder = base_bis.features
 
         self.attention_pool = AttentionPooling(
             in_dim=2 * feature_dim, num_classes=num_classes
