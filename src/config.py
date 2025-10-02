@@ -105,3 +105,5 @@ class Trainconfig:
     use_cbam: ClassVar[bool] = train_toml["use_cbam"]
     undersample: ClassVar[bool] = train_toml["undersample"]
     gated: ClassVar[bool] = train_toml["gated"]
+    class_weighting: ClassVar[bool] = train_toml["class_weighting"]
+    setup_name: ClassVar[str] = train_toml["setup_name"]
