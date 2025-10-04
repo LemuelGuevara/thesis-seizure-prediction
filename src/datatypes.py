@@ -15,7 +15,6 @@ class EpochInterval:
     end: int
     duration: Optional[int] = None
     windows_created: Optional[int] = None
-    file_name: Optional[str] = None
 
 
 @dataclass
@@ -46,9 +45,3 @@ class PrecomputedStftSummary:
     number_of_seizures: int
     preictal_intervals: int
     interictal_intervals: int
-
-
-@dataclass
-class IntervalFileInfo:
-    file_name: str
-    interval: EpochInterval
