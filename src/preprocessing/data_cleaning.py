@@ -11,7 +11,6 @@ import re
 import sys
 import typing
 from datetime import timedelta
-from typing import cast
 
 import mne
 from mne.io import BaseRaw
@@ -20,7 +19,7 @@ from tqdm import tqdm
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/../")
 
 from src.config import DataConfig, PreprocessingConfig
-from src.datatypes import EpochInterval
+from src.datatypes import EpochInterval, IntervalFileInfo
 from src.logger import setup_logger
 from src.utils import parse_time_str
 
@@ -35,7 +34,13 @@ interictal_windows_count: int = 0
 
 def extract_seizure_intervals(
     patient_summary: typing.TextIO,
-) -> tuple[list[EpochInterval], list[EpochInterval], list[EpochInterval]]:
+) -> tuple[
+    list[EpochInterval],
+    list[EpochInterval],
+    list[EpochInterval],
+    list[IntervalFileInfo],  # seizure files with filename + interval
+    list[IntervalFileInfo],  # no-seizure files with filename + interval
+]:
     """
     Extracts seizure intervals from a patient summart text file.
 
@@ -55,6 +60,10 @@ def extract_seizure_intervals(
     interictal_intervals: list[EpochInterval] = []
     ictal_intervals: list[EpochInterval] = []
 
+    seizure_files_data: list[IntervalFileInfo] = []
+    no_seizure_files_data: list[IntervalFileInfo] = []
+
+    file_name = ""
     pending_seizure_start = None
     file_start = None
     file_end = None
@@ -76,14 +85,16 @@ def extract_seizure_intervals(
             file_end = parse_time_str(line.split(":", 1)[1].strip())
         elif line.startswith("Number of Seizures in File:"):
             no_of_seizures = int(line.split(":", 1)[1].strip().split()[0])
-            if no_of_seizures == 0:
-                interictal_intervals.append(
-                    EpochInterval(
-                        phase="interictal",
-                        start=0,
-                        end=3600,
-                    )
+            if no_of_seizures == 0 and file_start and file_end:
+                duration_seconds = int((file_end - file_start).total_seconds())
+                interval = EpochInterval(
+                    phase="interictal",
+                    start=0,
+                    end=min(3600, duration_seconds),
+                    file_name=file_name,
                 )
+                interictal_intervals.append(interval)
+                no_seizure_files_data.append(IntervalFileInfo(file_name, interval))
         elif re.match(r"Seizure(\s+\d+)?\s+Start Time:", line):
             pending_seizure_start = int(line.split(":")[-1].strip().split()[0])
         elif (
@@ -91,9 +102,14 @@ def extract_seizure_intervals(
             and pending_seizure_start is not None
         ):
             end_sec = int(line.split(":")[-1].strip().split()[0])
-            ictal_intervals.append(
-                EpochInterval(phase="ictal", start=pending_seizure_start, end=end_sec)
+            ictal_interval = EpochInterval(
+                phase="ictal",
+                start=pending_seizure_start,
+                end=end_sec,
+                file_name=file_name,
             )
+            seizure_files_data.append(IntervalFileInfo(file_name, ictal_interval))
+            ictal_intervals.append(ictal_interval)
             pending_seizure_start = None
 
     assert file_start is not None, "file_start cannot be None"
@@ -130,6 +146,7 @@ def extract_seizure_intervals(
                     phase="interictal",
                     start=int((current_start - file_start).total_seconds()),
                     end=int((preictal_start_time - file_start).total_seconds()),
+                    file_name=file_name,
                 )
             )
 
@@ -138,6 +155,7 @@ def extract_seizure_intervals(
                 phase="preictal",
                 start=int((preictal_start_time - file_start).total_seconds()),
                 end=int((seizure_start_time - file_start).total_seconds()),
+                file_name=file_name,
             )
         )
 
@@ -150,6 +168,7 @@ def extract_seizure_intervals(
                 phase="interictal",
                 start=int((current_start - file_start).total_seconds()),
                 end=int((file_end - file_start).total_seconds()),
+                file_name=file_name,
             )
         )
 
@@ -157,41 +176,39 @@ def extract_seizure_intervals(
         preictal_intervals,
         interictal_intervals,
         ictal_intervals,
+        seizure_files_data,
+        no_seizure_files_data,
     )
 
 
 # 1. Loads all EDF recordings of a patient (since we have multiple recordings per patient)
-def load_raw_recordings(patient_id: str) -> list[BaseRaw]:
+def load_raw_recordings(patient_id: str, file_names: list[str]) -> list[BaseRaw]:
     """
     Loads all raw EDF recordings of a patient without filtering.
 
     Args:
         patient_id (str): Zero-padded patient ID (e.g. "01").
+        combined_intervals (list[EpochInterval]): List of the preictal, ictal,
+            and interictal intervals combined
 
     Returns:
         list[BaseRaw]: List of unprocessed raw recordings.
     """
 
     logger.info(f"Loading EDF files for patient {patient_id}")
-
     patient_folder = os.path.join(DataConfig.dataset_path, f"chb{patient_id}")
     raw_edf_list: list[BaseRaw] = []
 
-    for root, dirs, files in os.walk(patient_folder):
-        files = [f for f in files if f.lower().endswith(".edf")]
-        files.sort()
+    # Load EDF files
+    for file_name in tqdm(
+        file_names, desc=f"Reading EDF files for patient {patient_id}"
+    ):
+        recording_path = os.path.join(patient_folder, file_name)
+        logger.debug(f"Reading file: {file_name}")
 
-        for file in tqdm(files, desc=f"Reading EDF files in {os.path.basename(root)}"):
-            recording_path = os.path.join(root, file)
-            logger.debug(f"Reading file: {file}")
-
-            raw_edf = mne.io.read_raw_edf(
-                recording_path, preload=False, verbose="error"
-            )
-            raw_edf.pick(
-                PreprocessingConfig.selected_channels
-            )  # only keep channels defined in config
-            raw_edf_list.append(raw_edf)
+        raw_edf = mne.io.read_raw_edf(recording_path, preload=False, verbose="error")
+        raw_edf.pick(PreprocessingConfig.selected_channels)
+        raw_edf_list.append(raw_edf)
 
     if not raw_edf_list:
         raise FileNotFoundError(f"No EDF files found in {patient_folder}")
@@ -230,30 +247,6 @@ def apply_filters(
     return raw
 
 
-def load_patient_recording(patient_id: str) -> BaseRaw:
-    """
-    Loads and preprocesses a patient's EEG recordings
-    - Reads EDFs
-    - Concatenates them
-
-    Args:
-        patient_id (str): Patient ID (e.g. "01")
-
-    Returns:
-        BaseRaw: Concatenated and filtered EEG recording.
-    """
-
-    raw_edf_list: list[BaseRaw] = load_raw_recordings(patient_id)
-
-    # Concatenate all files into one continuous recording
-    logger.info("Concatenating EDF files")
-    raw_concatenated: BaseRaw = cast(
-        BaseRaw, mne.concatenate_raws(raw_edf_list, preload=False)
-    )
-
-    return raw_concatenated
-
-
 # 3. Preprocessing: Segmentation into epochs
 def segment_intervals(
     intervals: list[EpochInterval],
@@ -288,7 +281,11 @@ def segment_intervals(
             window_end = min(current_start + epoch_length, end_sec)
 
             windows.append(
-                EpochInterval(start=current_start, end=window_end, phase=interval.phase)
+                EpochInterval(
+                    start=current_start,
+                    end=window_end,
+                    phase=interval.phase,
+                )
             )
             interval_windows += 1
             current_start += step

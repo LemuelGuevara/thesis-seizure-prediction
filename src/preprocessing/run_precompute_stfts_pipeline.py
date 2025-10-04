@@ -7,21 +7,23 @@ STFTS from the EEG recordings.
 
 import gc
 import os
+from typing import cast
 
+from mne.io.base import BaseRaw, concatenate_raws
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
 from src.config import DataConfig
 from src.logger import get_all_active_loggers, setup_logger
+from src.preprocessing.data_transformation import precompute_stfts
 from src.utils import export_to_csv, is_precomputed_data_exists, load_patient_summary
 
 from .data_cleaning import (
     apply_filters,
     extract_seizure_intervals,
-    load_patient_recording,
+    load_raw_recordings,
     segment_intervals,
 )
-from .data_transformation import precompute_stfts
 
 logger = setup_logger(name="run_precompute_stfts")
 active_loggers = get_all_active_loggers()
@@ -56,8 +58,23 @@ def main():
                     preictal_intervals,
                     interictal_intervals,
                     ictal_intervals,
+                    seizure_files_data,
+                    no_seizure_files_data,
                 ) = extract_seizure_intervals(patient_summary)
                 logger.info(f"Number of seizures: {len(ictal_intervals)}")
+
+            # TODO:
+            # [] limit no_seizure_intervals to just the total number of seizures
+            # [] read only filtered files
+
+            combined_intervals = (
+                preictal_intervals + interictal_intervals + ictal_intervals
+            )
+
+            cropped_no_seizure_files = no_seizure_files_data[: len(ictal_intervals)]
+            seizure_filenames = [file.file_name for file in seizure_files_data]
+            no_seizure_filenames = [file.file_name for file in cropped_no_seizure_files]
+            total_files = seizure_filenames + no_seizure_filenames
 
             patient_stfts_dir = os.path.join(
                 DataConfig.precomputed_data_path, f"patient_{patient_id}", "stfts"
@@ -77,7 +94,10 @@ def main():
                     phase_counts[epoch.phase] = phase_counts.get(epoch.phase, 0) + 1
             else:
                 # 2. Loading patient recordings and concatenating all recordings into 1 continuous recording
-                recording = load_patient_recording(patient_id)
+                raw_recordings = load_raw_recordings(patient_id, total_files)
+                raw_concatenated = cast(
+                    BaseRaw, concatenate_raws(raw_recordings, preload=False)
+                )
 
                 """
                     Data Preprocessing
@@ -87,7 +107,7 @@ def main():
                     """
 
                 logger.info("Loading data into memory")
-                loaded_raw = recording.load_data()
+                loaded_raw = raw_concatenated.load_data()
                 logger.info(
                     f"Memory size: {loaded_raw.get_data().nbytes / (1024**2):.2f} MB"
                 )
@@ -95,16 +115,20 @@ def main():
                 # 1. Filtering
                 filtered_recording = apply_filters(loaded_raw)
 
-                # Removed the loaded raw after filtering to save ram.
+                intervals_to_segment = preictal_intervals + interictal_intervals
+                # intervals_to_segment = [
+                #     interval
+                #     for interval in combined_intervals
+                #     if interval.file_name in total_files
+                # ]
+
+                # 2. 30-second epoch segmentation
+                segmented_intervals = segment_intervals(intervals_to_segment)
+
+                # Removed the loadded raw recording after filtering to save ram.
                 # The filtered recording will then be loaded again in the precompute stfts epoch
                 del loaded_raw
                 gc.collect()
-
-                # 2. 30-second epoch segmentation
-                segmented_intervals = segment_intervals(
-                    preictal_intervals + interictal_intervals
-                    # Combining all extracted intervals
-                )
 
                 # 3. Computation of STFT
                 # NOTE: STFTS will be precomputed and saved on the disk
