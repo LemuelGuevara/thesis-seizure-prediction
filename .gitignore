@@ -3,7 +3,7 @@ __pycache__/
 dataset/
 precomputed_data/
 .vscode
-*.toml
+config.toml
 runs/
 *.stfolder
 checkpoints/
