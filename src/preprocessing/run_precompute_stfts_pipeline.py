@@ -7,18 +7,20 @@ STFTS from the EEG recordings.
 
 import gc
 import os
+from pathlib import Path
 
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
 from src.config import DataConfig
+from src.datatypes import EpochInterval
 from src.logger import get_all_active_loggers, setup_logger
 from src.utils import export_to_csv, is_precomputed_data_exists, load_patient_summary
 
 from .data_cleaning import (
     apply_filters,
     extract_seizure_intervals,
-    load_patient_recording,
+    load_raw_recordings,
     segment_intervals,
 )
 from .data_transformation import precompute_stfts
@@ -64,6 +66,16 @@ def main():
             )
             os.makedirs(patient_stfts_dir, exist_ok=True)
 
+            all_intervals = preictal_intervals + interictal_intervals
+            file_intervals: dict[str, list[EpochInterval]] = {}
+            for interval in all_intervals:
+                if interval.file_name is None:
+                    continue
+                file_intervals.setdefault(interval.file_name, []).append(interval)
+
+            # Initialize phase counts once per patient
+            phase_counts: dict[str, int] = {}
+
             if is_precomputed_data_exists(data_path=patient_stfts_dir):
                 logger.info(
                     f"Precomputed STFTs found for patient {patient_id} — skipping reading/precompute."
@@ -72,12 +84,11 @@ def main():
                 segmented_intervals = segment_intervals(
                     preictal_intervals + interictal_intervals
                 )
-                phase_counts: dict[str, int] = {}
                 for epoch in segmented_intervals:
                     phase_counts[epoch.phase] = phase_counts.get(epoch.phase, 0) + 1
             else:
                 # 2. Loading patient recordings and concatenating all recordings into 1 continuous recording
-                recording = load_patient_recording(patient_id)
+                raw_recordings = load_raw_recordings(patient_id)
 
                 """
                     Data Preprocessing
@@ -86,45 +97,57 @@ def main():
                     - Computation of STFT
                     """
 
-                logger.info("Loading data into memory")
-                loaded_raw = recording.load_data()
-                logger.info(
-                    f"Memory size: {loaded_raw.get_data().nbytes / (1024**2):.2f} MB"
-                )
+                for raw_recording in raw_recordings:
+                    file_name = Path(raw_recording.filenames[0]).name
+                    intervals = file_intervals.get(file_name, [])
+                    if not intervals:
+                        continue
 
-                # 1. Filtering
-                filtered_recording = apply_filters(loaded_raw)
+                    loaded_raw = raw_recording.load_data()
 
-                # Removed the loaded raw after filtering to save ram.
-                # The filtered recording will then be loaded again in the precompute stfts epoch
-                del loaded_raw
-                gc.collect()
+                    logger.info(f"Processing file: {file_name}")
+                    logger.info(
+                        f"Loading data into memory: {raw_recording.filenames[0]}"
+                    )
+                    logger.info(
+                        f"Loaded Raw Memory size: {loaded_raw.get_data().nbytes / (1024**2):.2f} MB"
+                    )
 
-                # 2. 30-second epoch segmentation
-                segmented_intervals = segment_intervals(
-                    preictal_intervals + interictal_intervals
-                    # Combining all extracted intervals
-                )
+                    # 1. Filtering
+                    filtered_recording = apply_filters(loaded_raw)
 
-                # 3. Computation of STFT
-                # NOTE: STFTS will be precomputed and saved on the disk
+                    # Removed the loaded raw after filtering to save ram.
+                    # The filtered recording will then be loaded again in the precompute stfts epoch
+                    del loaded_raw
+                    gc.collect()
 
-                # Void function for precomputing the stfts, this will also instantly save these stfts
-                # on the disk
-                phase_counts = precompute_stfts(
-                    recording=filtered_recording,
-                    patient_stfts_dir=patient_stfts_dir,
-                    segmented_intervals=segmented_intervals,
-                )
+                    # 2. 30-second epoch segmentation
+                    segmented_intervals = segment_intervals(intervals)
 
-                precomputed_stfts_summary.append(
-                    {
-                        "patient_index": patient,
-                        "number_of_seizures": len(ictal_intervals),
-                        "preictal_intervals": phase_counts.get("preictal", 0),
-                        "interictal_intervals": phase_counts.get("interictal", 0),
-                    }
-                )
+                    # 3. Computation of STFT
+                    # NOTE: STFTS will be precomputed and saved on the disk
+                    file_phase_counts = precompute_stfts(
+                        recording=filtered_recording,
+                        patient_stfts_dir=patient_stfts_dir,
+                        segmented_intervals=segmented_intervals,
+                    )
+
+                    # Aggregate counts across files
+                    for phase, count in file_phase_counts.items():
+                        phase_counts[phase] = phase_counts.get(phase, 0) + count
+
+                    del filtered_recording
+                    gc.collect()
+
+            # Append **once per patient**
+            precomputed_stfts_summary.append(
+                {
+                    "patient_index": patient,
+                    "number_of_seizures": len(ictal_intervals),
+                    "preictal_intervals": phase_counts.get("preictal", 0),
+                    "interictal_intervals": phase_counts.get("interictal", 0),
+                }
+            )
 
     # Write to csv the summarized patient precomputed stfts
     precomputed_stfts_summary_path = os.path.join(
