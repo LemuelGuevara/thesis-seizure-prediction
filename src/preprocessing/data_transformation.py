@@ -327,7 +327,7 @@ def precompute_stfts(
     channel_names = PreprocessingConfig.selected_channels
     sfreq = float(recording.info["sfreq"])
 
-    logger.info(f"Selected channels: {channel_names}")
+    logger.info(f"Selected channels: {len(channel_names)}")
     logger.info(f"Sampling frequency: {sfreq} Hz")
 
     ch_index_map = {name: recording.ch_names.index(name) for name in channel_names}
