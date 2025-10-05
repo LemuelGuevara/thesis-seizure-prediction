@@ -63,16 +63,27 @@ def main():
                 ) = extract_seizure_intervals(patient_summary)
                 logger.info(f"Number of seizures: {len(ictal_intervals)}")
 
-            combined_intervals = (
-                preictal_intervals + interictal_intervals + ictal_intervals
-            )
-
+            # Filter interictal intervals to only include the files we want to keep
             keep_fraction = DataConfig.file_undersampling_percent
             num_to_keep = int(len(no_seizure_files_data) * keep_fraction)
             cropped_no_seizure_files = no_seizure_files_data[:num_to_keep]
+            cropped_no_seizure_filenames = {
+                file.file_name for file in cropped_no_seizure_files
+            }
+
+            # Only keep interictal intervals from the cropped file list
+            filtered_interictal_intervals = [
+                interval
+                for interval in interictal_intervals
+                if interval.file_name in cropped_no_seizure_filenames
+            ]
+
+            combined_intervals = preictal_intervals + filtered_interictal_intervals
+
             logger.info(
                 f"Keeping {len(cropped_no_seizure_files)} of {len(no_seizure_files_data)} "
-                f"non-seizure files ({keep_fraction * 100:.0f}% kept)"
+                f"non-seizure files ({keep_fraction * 100:.0f}% kept) "
+                f"with {len(filtered_interictal_intervals)} interictal intervals"
             )
 
             seizure_filenames = [file.file_name for file in seizure_files_data]
@@ -89,9 +100,10 @@ def main():
                     f"Precomputed STFTs found for patient {patient_id} — skipping reading/precompute."
                 )
                 # Still count the intervals even though we skip processing
-                segmented_intervals = segment_intervals(
-                    preictal_intervals + interictal_intervals
+                intervals_to_segment = (
+                    preictal_intervals + filtered_interictal_intervals
                 )
+                segmented_intervals = segment_intervals(intervals_to_segment)
                 phase_counts: dict[str, int] = {}
                 for epoch in segmented_intervals:
                     phase_counts[epoch.phase] = phase_counts.get(epoch.phase, 0) + 1
@@ -118,15 +130,8 @@ def main():
                 # 1. Filtering
                 filtered_recording = apply_filters(loaded_raw)
 
-                intervals_to_segment = preictal_intervals + interictal_intervals
-                # intervals_to_segment = [
-                #     interval
-                #     for interval in combined_intervals
-                #     if interval.file_name in total_files
-                # ]
-
                 # 2. 30-second epoch segmentation
-                segmented_intervals = segment_intervals(intervals_to_segment)
+                segmented_intervals = segment_intervals(combined_intervals)
 
                 # Removed the loadded raw recording after filtering to save ram.
                 # The filtered recording will then be loaded again in the precompute stfts epoch
