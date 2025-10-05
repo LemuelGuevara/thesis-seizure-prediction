@@ -47,10 +47,9 @@ def main():
                 - Normalizing time format 
                 - Loading patient recordings
                 - Concatenating all recordings of each patient into 1 continuous recording
-                """
+            """
 
             # 1. Extraction of seizure intervals and normalization of time format
-            # --- Always extract seizure intervals for summary data ---
             with load_patient_summary(
                 patient_id, DataConfig.dataset_path
             ) as patient_summary:
@@ -64,8 +63,7 @@ def main():
                 logger.info(f"Number of seizures: {len(ictal_intervals)}")
 
             # Filter interictal intervals to only include the files we want to keep
-            keep_fraction = DataConfig.file_undersampling_percent
-            num_to_keep = int(len(no_seizure_files_data) * keep_fraction)
+            num_to_keep = len(ictal_intervals)
             cropped_no_seizure_files = no_seizure_files_data[:num_to_keep]
             cropped_no_seizure_filenames = {
                 file.file_name for file in cropped_no_seizure_files
@@ -81,8 +79,7 @@ def main():
             combined_intervals = preictal_intervals + filtered_interictal_intervals
 
             logger.info(
-                f"Keeping {len(cropped_no_seizure_files)} of {len(no_seizure_files_data)} "
-                f"non-seizure files ({keep_fraction * 100:.0f}% kept) "
+                f"Keeping {len(cropped_no_seizure_files)} of {len(no_seizure_files_data)} non-seizure files "
                 f"with {len(filtered_interictal_intervals)} interictal intervals"
             )
 
@@ -100,10 +97,7 @@ def main():
                     f"Precomputed STFTs found for patient {patient_id} — skipping reading/precompute."
                 )
                 # Still count the intervals even though we skip processing
-                intervals_to_segment = (
-                    preictal_intervals + filtered_interictal_intervals
-                )
-                segmented_intervals = segment_intervals(intervals_to_segment)
+                segmented_intervals = segment_intervals(combined_intervals)
                 phase_counts: dict[str, int] = {}
                 for epoch in segmented_intervals:
                     phase_counts[epoch.phase] = phase_counts.get(epoch.phase, 0) + 1
@@ -119,7 +113,7 @@ def main():
                     - Filtering
                     - 30-second epoch segmentation
                     - Computation of STFT
-                    """
+                """
 
                 logger.info("Loading data into memory")
                 loaded_raw = raw_concatenated.load_data()
