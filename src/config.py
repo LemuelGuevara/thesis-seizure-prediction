@@ -23,6 +23,9 @@ class DataConfig:
         )
     )
     patients_to_process: ClassVar[list[int]] = config["data"]["patients_to_process"]
+    file_undersampling_percent: ClassVar[int] = config["data"][
+        "file_undersampling_percent"
+    ]
 
 
 @dataclass

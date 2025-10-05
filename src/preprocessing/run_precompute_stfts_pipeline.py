@@ -63,15 +63,18 @@ def main():
                 ) = extract_seizure_intervals(patient_summary)
                 logger.info(f"Number of seizures: {len(ictal_intervals)}")
 
-            # TODO:
-            # [] limit no_seizure_intervals to just the total number of seizures
-            # [] read only filtered files
-
             combined_intervals = (
                 preictal_intervals + interictal_intervals + ictal_intervals
             )
 
-            cropped_no_seizure_files = no_seizure_files_data[: len(ictal_intervals)]
+            keep_fraction = DataConfig.file_undersampling_percent
+            num_to_keep = int(len(no_seizure_files_data) * keep_fraction)
+            cropped_no_seizure_files = no_seizure_files_data[:num_to_keep]
+            logger.info(
+                f"Keeping {len(cropped_no_seizure_files)} of {len(no_seizure_files_data)} "
+                f"non-seizure files ({keep_fraction * 100:.0f}% kept)"
+            )
+
             seizure_filenames = [file.file_name for file in seizure_files_data]
             no_seizure_filenames = [file.file_name for file in cropped_no_seizure_files]
             total_files = seizure_filenames + no_seizure_filenames
