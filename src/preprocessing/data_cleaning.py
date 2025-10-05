@@ -58,7 +58,6 @@ def extract_seizure_intervals(
     pending_seizure_start = None
     file_start = None
     file_end = None
-    file_name = ""
 
     for line in patient_summary:
         # In order to get the preictal and interictal intervals, we need to loop through the
@@ -71,7 +70,6 @@ def extract_seizure_intervals(
 
         if line.startswith("File Name:"):
             file_name = line.split(":", 1)[1].strip()
-            file_name = os.path.basename(file_name)
         elif line.startswith("File Start Time:"):
             file_start = parse_time_str(line.split(":", 1)[1].strip())
         elif line.startswith("File End Time:"):
@@ -81,7 +79,9 @@ def extract_seizure_intervals(
             if no_of_seizures == 0:
                 interictal_intervals.append(
                     EpochInterval(
-                        phase="interictal", start=0, end=3600, file_name=file_name
+                        phase="interictal",
+                        start=0,
+                        end=3600,
                     )
                 )
         elif re.match(r"Seizure(\s+\d+)?\s+Start Time:", line):
@@ -130,7 +130,6 @@ def extract_seizure_intervals(
                     phase="interictal",
                     start=int((current_start - file_start).total_seconds()),
                     end=int((preictal_start_time - file_start).total_seconds()),
-                    file_name=file_name,
                 )
             )
 
@@ -139,7 +138,6 @@ def extract_seizure_intervals(
                 phase="preictal",
                 start=int((preictal_start_time - file_start).total_seconds()),
                 end=int((seizure_start_time - file_start).total_seconds()),
-                file_name=file_name,
             )
         )
 
@@ -152,7 +150,6 @@ def extract_seizure_intervals(
                 phase="interictal",
                 start=int((current_start - file_start).total_seconds()),
                 end=int((file_end - file_start).total_seconds()),
-                file_name=file_name,
             )
         )
 

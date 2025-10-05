@@ -15,7 +15,6 @@ class EpochInterval:
     end: int
     duration: Optional[int] = None
     windows_created: Optional[int] = None
-    file_name: Optional[str] = None
 
 
 @dataclass
