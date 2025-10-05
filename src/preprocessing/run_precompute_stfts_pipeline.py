@@ -7,6 +7,7 @@ STFTS from the EEG recordings.
 
 import gc
 import os
+import random
 from typing import cast
 
 from mne.io.base import BaseRaw, concatenate_raws
@@ -16,7 +17,12 @@ from tqdm.contrib.logging import logging_redirect_tqdm
 from src.config import DataConfig
 from src.logger import get_all_active_loggers, setup_logger
 from src.preprocessing.data_transformation import precompute_stfts
-from src.utils import export_to_csv, is_precomputed_data_exists, load_patient_summary
+from src.utils import (
+    export_to_csv,
+    is_precomputed_data_exists,
+    load_patient_summary,
+    set_seed,
+)
 
 from .data_cleaning import (
     apply_filters,
@@ -30,6 +36,7 @@ active_loggers = get_all_active_loggers()
 
 
 def main():
+    set_seed()
     logger.info("Starting precomputation of STFTs for all patients")
 
     precomputed_stfts_summary: list[dict[str, int]] = []
@@ -64,7 +71,7 @@ def main():
 
             # Filter interictal intervals to only include the files we want to keep
             num_to_keep = len(ictal_intervals)
-            cropped_no_seizure_files = no_seizure_files_data[:num_to_keep]
+            cropped_no_seizure_files = random.sample(no_seizure_files_data, num_to_keep)
             cropped_no_seizure_filenames = {
                 file.file_name for file in cropped_no_seizure_files
             }
