@@ -90,6 +90,10 @@ def main():
                 f"with {len(filtered_interictal_intervals)} interictal intervals"
             )
 
+            logger.info(
+                f"Selected non-seizure files for interictal intervals: {cropped_no_seizure_filenames}"
+            )
+
             seizure_filenames = [file.file_name for file in seizure_files_data]
             no_seizure_filenames = [file.file_name for file in cropped_no_seizure_files]
             total_files = seizure_filenames + no_seizure_filenames
