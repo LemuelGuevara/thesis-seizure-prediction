@@ -10,7 +10,6 @@ import os
 import random
 from typing import cast
 
-from mne.io.base import BaseRaw, concatenate_raws
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
@@ -27,9 +26,10 @@ from src.utils import (
 from .data_cleaning import (
     apply_filters,
     extract_seizure_intervals,
-    load_raw_recordings,
+    load_patient_recording,
     segment_intervals,
 )
+from .data_transformation import precompute_stfts
 
 logger = setup_logger(name="run_precompute_stfts")
 active_loggers = get_all_active_loggers()
@@ -64,8 +64,6 @@ def main():
                     preictal_intervals,
                     interictal_intervals,
                     ictal_intervals,
-                    seizure_files_data,
-                    no_seizure_files_data,
                 ) = extract_seizure_intervals(patient_summary)
                 logger.info(f"Number of seizures: {len(ictal_intervals)}")
 
@@ -114,10 +112,7 @@ def main():
                     phase_counts[epoch.phase] = phase_counts.get(epoch.phase, 0) + 1
             else:
                 # 2. Loading patient recordings and concatenating all recordings into 1 continuous recording
-                raw_recordings = load_raw_recordings(patient_id, total_files)
-                raw_concatenated = cast(
-                    BaseRaw, concatenate_raws(raw_recordings, preload=False)
-                )
+                recording = load_patient_recording(patient_id)
 
                 """
                     Data Preprocessing
@@ -127,7 +122,7 @@ def main():
                 """
 
                 logger.info("Loading data into memory")
-                loaded_raw = raw_concatenated.load_data()
+                loaded_raw = recording.load_data()
                 logger.info(
                     f"Memory size: {loaded_raw.get_data().nbytes / (1024**2):.2f} MB"
                 )
@@ -142,6 +137,12 @@ def main():
                 # The filtered recording will then be loaded again in the precompute stfts epoch
                 del loaded_raw
                 gc.collect()
+
+                # 2. 30-second epoch segmentation
+                segmented_intervals = segment_intervals(
+                    preictal_intervals + interictal_intervals
+                    # Combining all extracted intervals
+                )
 
                 # 3. Computation of STFT
                 # NOTE: STFTS will be precomputed and saved on the disk
