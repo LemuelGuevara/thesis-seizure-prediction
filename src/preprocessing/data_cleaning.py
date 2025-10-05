@@ -90,7 +90,7 @@ def extract_seizure_intervals(
                 interval = EpochInterval(
                     phase="interictal",
                     start=0,
-                    end=min(3600, duration_seconds),
+                    end=duration_seconds,
                     file_name=file_name,
                 )
                 interictal_intervals.append(interval)

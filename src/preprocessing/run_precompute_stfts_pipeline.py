@@ -7,6 +7,7 @@ STFTS from the EEG recordings.
 
 import gc
 import os
+import random
 from typing import cast
 
 from mne.io.base import BaseRaw, concatenate_raws
@@ -16,7 +17,12 @@ from tqdm.contrib.logging import logging_redirect_tqdm
 from src.config import DataConfig
 from src.logger import get_all_active_loggers, setup_logger
 from src.preprocessing.data_transformation import precompute_stfts
-from src.utils import export_to_csv, is_precomputed_data_exists, load_patient_summary
+from src.utils import (
+    export_to_csv,
+    is_precomputed_data_exists,
+    load_patient_summary,
+    set_seed,
+)
 
 from .data_cleaning import (
     apply_filters,
@@ -30,6 +36,7 @@ active_loggers = get_all_active_loggers()
 
 
 def main():
+    set_seed()
     logger.info("Starting precomputation of STFTs for all patients")
 
     precomputed_stfts_summary: list[dict[str, int]] = []
@@ -47,10 +54,9 @@ def main():
                 - Normalizing time format 
                 - Loading patient recordings
                 - Concatenating all recordings of each patient into 1 continuous recording
-                """
+            """
 
             # 1. Extraction of seizure intervals and normalization of time format
-            # --- Always extract seizure intervals for summary data ---
             with load_patient_summary(
                 patient_id, DataConfig.dataset_path
             ) as patient_summary:
@@ -63,15 +69,31 @@ def main():
                 ) = extract_seizure_intervals(patient_summary)
                 logger.info(f"Number of seizures: {len(ictal_intervals)}")
 
-            # TODO:
-            # [] limit no_seizure_intervals to just the total number of seizures
-            # [] read only filtered files
+            # Filter interictal intervals to only include the files we want to keep
+            num_to_keep = len(ictal_intervals)
+            cropped_no_seizure_files = random.sample(no_seizure_files_data, num_to_keep)
+            cropped_no_seizure_filenames = {
+                file.file_name for file in cropped_no_seizure_files
+            }
 
-            combined_intervals = (
-                preictal_intervals + interictal_intervals + ictal_intervals
+            # Only keep interictal intervals from the cropped file list
+            filtered_interictal_intervals = [
+                interval
+                for interval in interictal_intervals
+                if interval.file_name in cropped_no_seizure_filenames
+            ]
+
+            combined_intervals = preictal_intervals + filtered_interictal_intervals
+
+            logger.info(
+                f"Keeping {len(cropped_no_seizure_files)} of {len(no_seizure_files_data)} non-seizure files "
+                f"with {len(filtered_interictal_intervals)} interictal intervals"
             )
 
-            cropped_no_seizure_files = no_seizure_files_data[: len(ictal_intervals)]
+            logger.info(
+                f"Selected non-seizure files for interictal intervals: {cropped_no_seizure_filenames}"
+            )
+
             seizure_filenames = [file.file_name for file in seizure_files_data]
             no_seizure_filenames = [file.file_name for file in cropped_no_seizure_files]
             total_files = seizure_filenames + no_seizure_filenames
@@ -86,9 +108,7 @@ def main():
                     f"Precomputed STFTs found for patient {patient_id} — skipping reading/precompute."
                 )
                 # Still count the intervals even though we skip processing
-                segmented_intervals = segment_intervals(
-                    preictal_intervals + interictal_intervals
-                )
+                segmented_intervals = segment_intervals(combined_intervals)
                 phase_counts: dict[str, int] = {}
                 for epoch in segmented_intervals:
                     phase_counts[epoch.phase] = phase_counts.get(epoch.phase, 0) + 1
@@ -104,7 +124,7 @@ def main():
                     - Filtering
                     - 30-second epoch segmentation
                     - Computation of STFT
-                    """
+                """
 
                 logger.info("Loading data into memory")
                 loaded_raw = raw_concatenated.load_data()
@@ -115,15 +135,8 @@ def main():
                 # 1. Filtering
                 filtered_recording = apply_filters(loaded_raw)
 
-                intervals_to_segment = preictal_intervals + interictal_intervals
-                # intervals_to_segment = [
-                #     interval
-                #     for interval in combined_intervals
-                #     if interval.file_name in total_files
-                # ]
-
                 # 2. 30-second epoch segmentation
-                segmented_intervals = segment_intervals(intervals_to_segment)
+                segmented_intervals = segment_intervals(combined_intervals)
 
                 # Removed the loadded raw recording after filtering to save ram.
                 # The filtered recording will then be loaded again in the precompute stfts epoch
