@@ -21,7 +21,6 @@ from src.utils import export_to_csv, get_torch_device, set_seed
 
 logger = setup_logger(name="train")
 device = get_torch_device()
-writer = SummaryWriter()
 
 
 def main():
@@ -33,8 +32,14 @@ def main():
 
     for patient in tqdm(DataConfig.patients_to_process, desc="Patients"):
         patient_id = f"{patient:02d}"
-
         timestamp = datetime.now().strftime("%b%d_%H-%M-%S")
+
+        log_dir = os.path.join(
+            os.path.dirname(__file__), "runs", f"patient_{patient_id}", timestamp
+        )
+        os.makedirs(log_dir, exist_ok=True)
+        writer = SummaryWriter(log_dir=log_dir)
+
         checkpoint_path = os.path.join(
             os.path.dirname(__file__),
             "checkpoints",
@@ -168,10 +173,15 @@ def main():
                 logger.info(
                     f"[Patient {patient_id} | Fold {sample_idx + 1}] "
                     f"Epoch {epoch + 1}/{Trainconfig.num_epochs} "
-                    f"- train_loss: {epoch_loss:.4f} - val_loss: {val_loss:.4f}"
+                    f"- avg_train_loss: {avg_train_loss:.4f} | avg_val_loss: {avg_val_loss:.4f}"
                 )
-                writer.add_scalar(f"{patient_id}/Loss/train", epoch_loss, epoch)
-                writer.add_scalar(f"{patient_id}/Loss/val", val_loss, epoch)
+
+                writer.add_scalar(
+                    f"patient_{patient_id}/avg_train_loss", avg_train_loss, epoch
+                )
+                writer.add_scalar(
+                    f"patient_{patient_id}/avg_val_loss", avg_val_loss, epoch
+                )
                 writer.flush()
 
         acc = accuracy_score(all_labels, all_preds)
@@ -218,8 +228,7 @@ def main():
 
         # Save all results of each patient in csv file
         all_patients_results_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            "runs",
+            log_dir,
             "all_patients_results.csv",
         )
 
