@@ -6,9 +6,12 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.118.0",
+    "jupyterlab>=4.4.9",
+    "jupyterlab-vim>=4.1.4",
     "matplotlib>=3.10.6",
     "mne>=1.10.1",
     "numpy>=2.3.3",
+    "pandas>=2.3.3",
     "prettytable>=3.16.0",
     "pyqt5>=5.15.11",
     "scikit-learn>=1.7.2",
