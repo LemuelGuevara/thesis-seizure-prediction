@@ -45,6 +45,9 @@ def main():
 
         # Get get paired dataset
         tf_features, bis_features, labels = get_paired_dataset(patient_id=patient_id)
+        tf_tensor = torch.tensor(tf_features, dtype=torch.float32).permute(0, 3, 1, 2)
+        bis_tensor = torch.tensor(bis_features, dtype=torch.float32).permute(0, 3, 1, 2)
+        labels_tensor = torch.tensor(labels, dtype=torch.long)
 
         logger.info(
             f"Normalized features: {{tf: {tf_features.dtype}, {tf_features.min():.4f}-{tf_features.max():.4f}; "
@@ -60,9 +63,9 @@ def main():
             # Split train/test data through loocv
             (tf_train, bis_train, labels_train), (tf_test, bis_test, labels_test) = (
                 get_loocv_fold(
-                    tf_features=tf_features,
-                    bis_features=bis_features,
-                    labels=labels,
+                    tf_tensor,
+                    bis_tensor,
+                    labels_tensor,
                     sample_idx=sample_idx,
                     undersample=Trainconfig.undersample
                     and not Trainconfig.class_weighting,
@@ -72,6 +75,14 @@ def main():
             train_loader = create_data_loader(
                 tensor_dataset=TensorDataset(tf_train, bis_train, labels_train)
             )
+            batch_tf, batch_bis, batch_labels = next(iter(train_loader))
+            logger.info(
+                f"Train batch types: tf={batch_tf.dtype}, bis={batch_bis.dtype}, labels={batch_labels.dtype}"
+            )
+            logger.info(
+                f"Train batch shapes: tf={batch_tf.shape}, bis={batch_bis.shape}, labels={batch_labels.shape}"
+            )
+
             test_loader = create_data_loader(
                 tensor_dataset=TensorDataset(tf_test, bis_test, labels_test)
             )
@@ -123,7 +134,8 @@ def main():
 
                     epoch_loss += loss.item()
 
-                epoch_loss /= len(train_loader)
+                # Compute average training loss
+                avg_train_loss = epoch_loss / len(train_loader)
 
                 model.eval()
                 val_loss = 0.0
@@ -141,12 +153,9 @@ def main():
                         all_preds.extend(preds)
                         all_labels.extend(batch_labels.cpu().numpy())
 
-                    writer.add_scalar("Loss/train", epoch_loss, epoch)
-                    writer.flush()
-                val_loss /= len(test_loader)
+                avg_val_loss = val_loss / len(test_loader)
 
-                # Apply early stopping to stop overfitting the model
-                early_stopping(val_loss, model)
+                early_stopping(avg_val_loss, model)
                 if early_stopping.best_score is not None:
                     fold_best_val = -float(early_stopping.best_score)
                     if fold_best_val < patient_best_val_loss:
@@ -157,7 +166,7 @@ def main():
                     break
 
                 logger.info(
-                    f"Patient {patient_id} Fold {sample_idx + 1} "
+                    f"[Patient {patient_id} | Fold {sample_idx + 1}] "
                     f"Epoch {epoch + 1}/{Trainconfig.num_epochs} "
                     f"- train_loss: {epoch_loss:.4f} - val_loss: {val_loss:.4f}"
                 )
