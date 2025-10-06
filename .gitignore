@@ -7,3 +7,4 @@ config.toml
 runs/
 *.stfolder
 checkpoints/
+.ipynb_checkpoints/
