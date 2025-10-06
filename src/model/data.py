@@ -64,9 +64,9 @@ def get_paired_dataset(patient_id: str) -> tuple[np.ndarray, np.ndarray, np.ndar
 
 
 def get_loocv_fold(
-    tf_features: np.ndarray,
-    bis_features: np.ndarray,
-    labels: np.ndarray,
+    tf_tensor: Tensor,
+    bis_tensor: Tensor,
+    labels_tensor: Tensor,
     sample_idx: int,
     undersample: bool,
 ) -> tuple[tuple[Tensor, Tensor, Tensor], tuple[Tensor, Tensor, Tensor]]:
@@ -85,56 +85,34 @@ def get_loocv_fold(
     """
 
     logger.info(
-        f"Fold {sample_idx + 1} / {len(tf_features)} (leaving out sample {sample_idx})"
+        f"Fold {sample_idx + 1} / {len(tf_tensor)} (leaving out sample {sample_idx})"
     )
 
-    tf_train = np.delete(tf_features, sample_idx, axis=0)
-    bis_train = np.delete(bis_features, sample_idx, axis=0)
-    labels_train = np.delete(labels, sample_idx, axis=0)
+    mask = torch.arange(len(labels_tensor)) != sample_idx
 
+    tf_train = tf_tensor[mask]
+    bis_train = bis_tensor[mask]
+    labels_train = labels_tensor[mask]
+
+    tf_test = tf_tensor[~mask]
+    bis_test = bis_tensor[~mask]
+    labels_test = labels_tensor[~mask]
+
+    # (optional) undersampling still supported
     if undersample:
-        logger.info("Applying undersampling to training set")
+        unique, counts = torch.unique(labels_train, return_counts=True)
+        minority = torch.argmin(counts)
+        minority_count = counts[minority].item()
 
-        unique, counts = np.unique(labels_train, return_counts=True)
-        class_counts = dict(zip(unique, counts))
-        minority_class = min(class_counts, key=class_counts.get)
-        minority_count = class_counts[minority_class]
-
-        indices_by_class = {
-            label: np.where(labels_train == label)[0] for label in unique
-        }
-
-        sampled_indices = list(indices_by_class[minority_class]) + list(
-            np.random.choice(
-                indices_by_class[1 - minority_class], size=minority_count, replace=False
-            )
+        indices_min = torch.where(labels_train == minority)[0]
+        indices_maj = torch.where(labels_train != minority)[0]
+        sampled_maj = indices_maj[torch.randperm(len(indices_maj))[:minority_count]]
+        idx = torch.cat((indices_min, sampled_maj))
+        tf_train, bis_train, labels_train = (
+            tf_train[idx],
+            bis_train[idx],
+            labels_train[idx],
         )
-        np.random.shuffle(sampled_indices)
-
-        tf_train = tf_train[sampled_indices]
-        bis_train = bis_train[sampled_indices]
-        labels_train = labels_train[sampled_indices]
-
-        logger.info(f"Original training set class distribution: {class_counts}")
-        unique_new, counts_new = np.unique(labels_train, return_counts=True)
-        new_class_counts = dict(zip(unique_new, counts_new))
-        logger.info(f"Undersampled training set class distribution: {new_class_counts}")
-
-    tf_train = torch.tensor(tf_train, dtype=torch.float32).permute(0, 3, 1, 2)
-    bis_train = torch.tensor(bis_train, dtype=torch.float32).permute(0, 3, 1, 2)
-    labels_train = torch.tensor(labels_train, dtype=torch.long)
-
-    tf_test = (
-        torch.tensor(tf_features[sample_idx], dtype=torch.float32)
-        .unsqueeze(0)
-        .permute(0, 3, 1, 2)
-    )
-    bis_test = (
-        torch.tensor(bis_features[sample_idx], dtype=torch.float32)
-        .unsqueeze(0)
-        .permute(0, 3, 1, 2)
-    )
-    labels_test = torch.tensor([labels[sample_idx]], dtype=torch.long)
 
     return (tf_train, bis_train, labels_train), (tf_test, bis_test, labels_test)
 
@@ -157,4 +135,5 @@ def create_data_loader(tensor_dataset: TensorDataset) -> DataLoader:
         shuffle=DataLoaderConfig.shuffle,
         num_workers=os.cpu_count() or 1,
         pin_memory=True,
+        persistent_workers=True,
     )
