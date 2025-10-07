@@ -180,24 +180,24 @@ def main():
                     "interictal_intervals": phase_counts.get("interictal", 0),
                 }
 
-            # Write to csv the summarized patient precomputed stfts
-            os.makedirs(DataConfig.runs_dir, exist_ok=True)
+                # Write to csv the summarized patient precomputed stfts
+                os.makedirs(DataConfig.runs_dir, exist_ok=True)
 
-            precomputed_stfts_summary_path = os.path.join(
-                DataConfig.runs_dir, "precomputed_stfts.csv"
-            )
-            fieldnames = [
-                "patient_id",
-                "number_of_seizures",
-                "preictal_intervals",
-                "interictal_intervals",
-            ]
-            export_to_csv(
-                path=precomputed_stfts_summary_path,
-                fieldnames=fieldnames,
-                data=[patient_stfts_summary],
-                mode="a",
-            )
+                precomputed_stfts_summary_path = os.path.join(
+                    DataConfig.runs_dir, "precomputed_stfts.csv"
+                )
+                fieldnames = [
+                    "patient_id",
+                    "number_of_seizures",
+                    "preictal_intervals",
+                    "interictal_intervals",
+                ]
+                export_to_csv(
+                    path=precomputed_stfts_summary_path,
+                    fieldnames=fieldnames,
+                    data=[patient_stfts_summary],
+                    mode="a",
+                )
 
 
 if __name__ == "__main__":
