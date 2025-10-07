@@ -116,7 +116,6 @@ def compute_bispectrum_estimation(
 
     # Pairwise target freqs
     targets = centers[:, None] + centers[None, :]
-    logger.debug("Computed pairwise target frequencies.")
 
     # Nearest index lookup (vectorized)
     pos = np.searchsorted(freqs, targets)
@@ -155,5 +154,4 @@ def compute_bispectrum_estimation(
     B_complex = np.array(results).reshape(n_bins, n_bins)
 
     B_db = 20.0 * np.log10(np.abs(B_complex) + eps)
-    logger.info("Finished computing bispectrum matrices.")
     return B_complex, B_db
