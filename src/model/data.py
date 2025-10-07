@@ -133,7 +133,7 @@ def create_data_loader(tensor_dataset: TensorDataset) -> DataLoader:
         dataset=tensor_dataset,
         batch_size=DataLoaderConfig.batch_size,
         shuffle=DataLoaderConfig.shuffle,
-        num_workers=DataLoader.num_workers,
+        num_workers=DataLoaderConfig.num_workers,
         pin_memory=True,
         persistent_workers=True,
     )
