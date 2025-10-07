@@ -10,6 +10,7 @@ import os
 import random
 from typing import cast
 
+import numpy as np
 from mne.io.base import BaseRaw, concatenate_raws
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
@@ -69,19 +70,46 @@ def main():
                 ) = extract_seizure_intervals(patient_summary)
                 logger.info(f"Number of seizures: {len(ictal_intervals)}")
 
-            # Filter interictal intervals to only include the files we want to keep
-            num_to_keep = len(ictal_intervals)
-            cropped_no_seizure_files = random.sample(no_seizure_files_data, num_to_keep)
+            # Initial values
+            seizure_filenames = [file.file_name for file in seizure_files_data]
+            no_seizure_filenames = [file.file_name for file in no_seizure_files_data]
+
+            cropped_no_seizure_files = no_seizure_files_data
             cropped_no_seizure_filenames = {
                 file.file_name for file in cropped_no_seizure_files
             }
+            filtered_interictal_intervals = interictal_intervals
+            combined_file_data = seizure_files_data + no_seizure_files_data
 
-            # Only keep interictal intervals from the cropped file list
-            filtered_interictal_intervals = [
-                interval
-                for interval in interictal_intervals
-                if interval.file_name in cropped_no_seizure_filenames
-            ]
+            if combined_file_data:
+                durations = [interval.duration for interval in combined_file_data]
+                average_recording_duration = round(np.mean(durations))  # in hours
+            else:
+                average_recording_duration = 0
+
+            logger.info(f"Average recording duration (s): {average_recording_duration}")
+
+            # We only do non-seizure file reduction when the average recording time
+            # of the patient is above is 3600s (or 1hr)
+            if average_recording_duration > 3600:
+                # Filter interictal intervals to only include the files we want to keep
+                num_to_keep = len(ictal_intervals)
+                cropped_no_seizure_files = random.sample(
+                    no_seizure_files_data, min(num_to_keep, len(no_seizure_files_data))
+                )
+                cropped_no_seizure_filenames = {
+                    file.file_name for file in cropped_no_seizure_files
+                }
+                # Only keep interictal intervals from the cropped file list
+                filtered_interictal_intervals = [
+                    interval
+                    for interval in interictal_intervals
+                    if interval.file_name in cropped_no_seizure_filenames
+                ]
+
+                no_seizure_filenames = [
+                    file.file_name for file in cropped_no_seizure_files
+                ]
 
             combined_intervals = preictal_intervals + filtered_interictal_intervals
 
@@ -89,15 +117,11 @@ def main():
                 f"Keeping {len(cropped_no_seizure_files)} of {len(no_seizure_files_data)} non-seizure files "
                 f"with {len(filtered_interictal_intervals)} interictal intervals"
             )
-
             logger.info(
                 f"Selected non-seizure files for interictal intervals: {cropped_no_seizure_filenames}"
             )
 
-            seizure_filenames = [file.file_name for file in seizure_files_data]
-            no_seizure_filenames = [file.file_name for file in cropped_no_seizure_files]
             total_files = seizure_filenames + no_seizure_filenames
-
             patient_stfts_dir = os.path.join(
                 DataConfig.precomputed_data_path, f"patient_{patient_id}", "stfts"
             )
