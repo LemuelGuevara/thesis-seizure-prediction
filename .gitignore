@@ -5,6 +5,9 @@ precomputed_data/
 .vscode
 config.toml
 runs/
+runs.bak/
 *.stfolder
 checkpoints/
 .ipynb_checkpoints/
+*.ipynb
+*.zip
