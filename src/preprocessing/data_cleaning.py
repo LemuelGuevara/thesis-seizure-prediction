@@ -219,8 +219,17 @@ def load_raw_recordings(patient_id: str, file_names: list[str]) -> list[BaseRaw]
         logger.debug(f"Reading file: {file_name}")
 
         raw_edf = mne.io.read_raw_edf(recording_path, preload=False, verbose="error")
-        raw_edf.pick(PreprocessingConfig.selected_channels)
-        raw_edf_list.append(raw_edf)
+        raw_channels = set(raw_edf.ch_names)
+        selected_channels = set(PreprocessingConfig.selected_channels)
+
+        # Only append if all selected channels are present
+        if selected_channels.issubset(raw_channels):
+            raw_edf.pick(PreprocessingConfig.selected_channels)
+            raw_edf_list.append(raw_edf)
+        else:
+            logger.warning(
+                f"Skipping {file_name}: missing channels {selected_channels - raw_channels}"
+            )
 
     if not raw_edf_list:
         raise FileNotFoundError(f"No EDF files found in {patient_folder}")
