@@ -4,20 +4,27 @@ from datetime import datetime
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from prettytable import PrettyTable
-from sklearn.metrics import accuracy_score, f1_score, recall_score
+from sklearn.metrics import accuracy_score, confusion_matrix, f1_score, recall_score
 from torch.amp import GradScaler, autocast
 from torch.utils.data import TensorDataset
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from src.config import DataConfig, Trainconfig, config
+from src.config import DataConfig, Trainconfig
 from src.logger import setup_logger
 from src.model.classification.concat_model import ConcatModel
 from src.model.classification.multi_seizure_model import MultimodalSeizureModel
 from src.model.data import create_data_loader, get_loocv_fold, get_paired_dataset
 from src.model.early_stopping import EarlyStopping
-from src.utils import export_to_csv, get_torch_device, set_seed
+from src.model.metrics_utils import (
+    PatientTrainLoss,
+    TrainingResults,
+    export_training_results,
+    plot_confusion_matrix,
+    plot_training_loss,
+    show_training_results,
+)
+from src.utils import get_torch_device, set_seed
 
 logger = setup_logger(name="train")
 device = get_torch_device()
@@ -28,7 +35,7 @@ def main():
     logger.info(f"Torch device: {device}")
     logger.info("Starting training for all patients")
 
-    loocv_results: list[dict[str, float | str]] = []
+    training_results_list: list[TrainingResults] = []
 
     for patient in tqdm(DataConfig.patients_to_process, desc="Patients"):
         patient_id = f"{patient:02d}"
@@ -65,6 +72,9 @@ def main():
         patient_best_val_loss = float("inf")
 
         for sample_idx in tqdm(range(len(tf_features)), desc="Samples"):
+            train_losses = []
+            val_losses = []
+
             # Split train/test data through loocv
             (tf_train, bis_train, labels_train), (tf_test, bis_test, labels_test) = (
                 get_loocv_fold(
@@ -159,6 +169,8 @@ def main():
                         all_labels.extend(batch_labels.cpu().numpy())
 
                 avg_val_loss = val_loss / len(test_loader)
+                train_losses.append(avg_train_loss)
+                val_losses.append(avg_val_loss)
 
                 early_stopping(avg_val_loss, model)
                 if early_stopping.best_score is not None:
@@ -176,69 +188,49 @@ def main():
                     f"- avg_train_loss: {avg_train_loss:.4f} | avg_val_loss: {avg_val_loss:.4f}"
                 )
 
-                writer.add_scalar(
-                    f"patient_{patient_id}/avg_train_loss", avg_train_loss, epoch
-                )
-                writer.add_scalar(
-                    f"patient_{patient_id}/avg_val_loss", avg_val_loss, epoch
-                )
-                writer.flush()
+        accuracy = round(accuracy_score(all_labels, all_preds), 4)
+        recall = round(recall_score(all_labels, all_preds, average="binary"), 4)
+        f1 = round(f1_score(all_labels, all_preds, average="binary"), 4)
 
-        acc = accuracy_score(all_labels, all_preds)
-        rec = recall_score(all_labels, all_preds, average="binary")
-        f1 = f1_score(all_labels, all_preds, average="binary")
+        cf_matrix = confusion_matrix(all_labels, all_preds, labels=[0, 1])
 
-        loocv_result_fieldnames = [
-            "patient",
+        # True Negatives, False Positives,
+        # False Negatives, True Positives
+        TN, FP, FN, TP = cf_matrix.ravel()
+
+        training_result_fieldnames = [
+            "patient_id",
             "setup_name",
             "run_timestamp",
-            "recall",
+            "true_positives",
+            "false_positives",
+            "true_negatives",
+            "false_negatives",
             "accuracy",
-            "f1-score",
+            "recall",
+            "f1_score",
         ]
 
-        # Show results of loocv in table format
-        table = PrettyTable()
-        table.field_names = loocv_result_fieldnames
-        table.title = f"Patient {patient_id} LOOCV Results"
-        table.add_row(
-            [
-                patient_id,
-                Trainconfig.setup_name,
-                timestamp,
-                f"{acc:.4f}",
-                f"{rec:.4f}",
-                f"{f1:.4f}",
-            ]
+        # Show training results in table format in the console
+        # NOTE: this is only for the current patient, not a list patient results
+        training_results = TrainingResults(
+            patient_id, timestamp, TP, FP, TN, FN, accuracy, recall, f1
         )
-        print("\nREMINDER: BALIKTAD ANG RECALL AT ACCURACY COLUMN!!!")
-        print(f"\n{table}")
+        show_training_results(training_result_fieldnames, training_results)
 
-        loocv_results.append(
-            {
-                "patient": patient_id,
-                "setup_name": Trainconfig.setup_name,
-                "run_timestamp": timestamp,
-                "recall": round(rec, 4),
-                "accuracy": round(acc, 4),
-                "f1-score": round(f1, 4),
-                "config": config,
-            }
+        # Plot and save the training loss
+        plot_training_loss(
+            PatientTrainLoss(
+                patient_id, train_losses, val_losses, all_preds, all_labels, timestamp
+            )
         )
 
-        # Save all results of each patient in csv file
-        all_patients_results_path = os.path.join(
-            log_dir,
-            "all_patients_results.csv",
-        )
+        # Plot and save confusion matrix
+        plot_confusion_matrix(patient_id, cf_matrix, timestamp)
 
-        export_to_csv(
-            path=all_patients_results_path,
-            fieldnames=loocv_result_fieldnames,
-            data=loocv_results,
-            mode="a",
-            json_metadata=("config", config),
-        )
+        # Export training results into csv
+        training_results_list.append(training_results)
+        export_training_results(training_result_fieldnames, training_results_list)
 
 
 if __name__ == "__main__":
