@@ -52,3 +52,4 @@ class PrecomputedStftSummary:
 class IntervalFileInfo:
     file_name: str
     interval: EpochInterval
+    duration: int

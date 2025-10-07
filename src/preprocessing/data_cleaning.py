@@ -38,8 +38,8 @@ def extract_seizure_intervals(
     list[EpochInterval],
     list[EpochInterval],
     list[EpochInterval],
-    list[IntervalFileInfo],  # seizure files with filename + interval
-    list[IntervalFileInfo],  # no-seizure files with filename + interval
+    list[IntervalFileInfo],
+    list[IntervalFileInfo],
 ]:
     """
     Extracts seizure intervals from a patient summart text file.
@@ -50,10 +50,14 @@ def extract_seizure_intervals(
         patient_summary (TextIO): Patient summary.txt file.
 
     Returns:
-        tuple[list[SeizureInterval], list[SeizureInterval], list[SeizureInterval]]:
+        tuple[list[SeizureInterval], list[SeizureInterval], list[SeizureInterval]
+            list[IntervalFileInfo], list[IntervalFileInfo], int]:
             - preictal_intervals: Intervals before seizures.
             - interictal_intervals: Intervals between seizures.
             - ictal_intervals: Actual seizure intervals.
+            - seizure_files_data: Files (recordings) with seizures.
+            - no_seizure_files_data: Files
+
     """
 
     preictal_intervals: list[EpochInterval] = []
@@ -94,7 +98,9 @@ def extract_seizure_intervals(
                     file_name=file_name,
                 )
                 interictal_intervals.append(interval)
-                no_seizure_files_data.append(IntervalFileInfo(file_name, interval))
+                no_seizure_files_data.append(
+                    IntervalFileInfo(file_name, interval, duration_seconds)
+                )
         elif re.match(r"Seizure(\s+\d+)?\s+Start Time:", line):
             pending_seizure_start = int(line.split(":")[-1].strip().split()[0])
         elif (
@@ -102,13 +108,19 @@ def extract_seizure_intervals(
             and pending_seizure_start is not None
         ):
             end_sec = int(line.split(":")[-1].strip().split()[0])
+            duration_seconds = 0
+            if file_start and file_end:
+                duration_seconds = int((file_end - file_start).total_seconds())
+
             ictal_interval = EpochInterval(
                 phase="ictal",
                 start=pending_seizure_start,
                 end=end_sec,
                 file_name=file_name,
             )
-            seizure_files_data.append(IntervalFileInfo(file_name, ictal_interval))
+            seizure_files_data.append(
+                IntervalFileInfo(file_name, ictal_interval, duration_seconds)
+            )
             ictal_intervals.append(ictal_interval)
             pending_seizure_start = None
 
