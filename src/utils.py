@@ -8,6 +8,7 @@ import os
 import platform
 import random
 from datetime import datetime, timedelta
+from re import sub
 from typing import Any, Literal, Optional
 
 import numpy as np
@@ -124,3 +125,11 @@ def export_to_csv(
                 row_to_write[meta_column_name] = json.dumps(meta_value)
 
             writer.writerow(row_to_write)
+
+
+def snake_case(s: str) -> str:
+    return "_".join(
+        sub(
+            "([A-Z][a-z]+)", r" \1", sub("([A-Z]+)", r" \1", s.replace("-", " "))
+        ).split()
+    ).lower()
