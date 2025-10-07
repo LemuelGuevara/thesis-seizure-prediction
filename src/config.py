@@ -6,7 +6,7 @@ import os
 from dataclasses import dataclass
 from typing import ClassVar, Literal
 
-from src.utils import load_toml_config
+from src.utils import load_toml_config, snake_case
 
 config_path = os.path.join(os.path.dirname(__file__), "..", "config.toml")
 config = load_toml_config(config_path)
@@ -23,9 +23,7 @@ class DataConfig:
         )
     )
     patients_to_process: ClassVar[list[int]] = config["data"]["patients_to_process"]
-    file_undersampling_percent: ClassVar[int] = config["data"][
-        "file_undersampling_percent"
-    ]
+    runs_dir: ClassVar[str] = config["data"]["runs_dir"]
 
 
 @dataclass
@@ -109,4 +107,4 @@ class Trainconfig:
     undersample: ClassVar[bool] = train_toml["undersample"]
     gated: ClassVar[bool] = train_toml["gated"]
     class_weighting: ClassVar[bool] = train_toml["class_weighting"]
-    setup_name: ClassVar[str] = train_toml["setup_name"]
+    setup_name: ClassVar[str] = snake_case(train_toml["setup_name"])
