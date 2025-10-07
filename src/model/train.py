@@ -30,6 +30,21 @@ logger = setup_logger(name="train")
 device = get_torch_device()
 
 
+def get_model():
+    """Initialize and wrap the model for multi-GPU if available."""
+    if Trainconfig.gated:
+        model = MultimodalSeizureModel(use_cbam=Trainconfig.use_cbam)
+    else:
+        model = ConcatModel(use_cbam=Trainconfig.use_cbam)
+
+    if torch.cuda.device_count() > 1:
+        logger.info(f"Using {torch.cuda.device_count()} GPUs")
+        model = nn.DataParallel(model)
+
+    model = model.to(device)
+    return model
+
+
 def main():
     set_seed()
     logger.info(f"Torch device: {device}")
@@ -103,10 +118,7 @@ def main():
             )
 
             # Initialize model, criterion, optimizer, scaler
-            if Trainconfig.gated:
-                model = MultimodalSeizureModel(use_cbam=Trainconfig.use_cbam).to(device)
-            else:
-                model = ConcatModel(use_cbam=Trainconfig.use_cbam).to(device)
+            model = get_model()
 
             if Trainconfig.class_weighting:
                 unique_labels, counts = torch.unique(labels_train, return_counts=True)
