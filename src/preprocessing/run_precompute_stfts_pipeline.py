@@ -90,8 +90,8 @@ def main():
             logger.info(f"Average recording duration (s): {average_recording_duration}")
 
             # We only do non-seizure file reduction when the average recording time
-            # of the patient is above is 3600s (or 1hr)
-            if average_recording_duration > 3600:
+            # of the patient is above 3600s (or 2hr)
+            if average_recording_duration > 7200:
                 # Filter interictal intervals to only include the files we want to keep
                 num_to_keep = len(ictal_intervals)
                 cropped_no_seizure_files = random.sample(
