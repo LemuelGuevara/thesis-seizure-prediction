@@ -97,6 +97,7 @@ class MultiSeizureModelConfig:
 class DataLoaderConfig:
     batch_size: ClassVar[int] = data_loader_toml["batch_size"]
     shuffle: ClassVar[bool] = data_loader_toml["shuffle"]
+    num_workers: ClassVar[bool] = data_loader_toml["num_workers"]
 
 
 @dataclass
