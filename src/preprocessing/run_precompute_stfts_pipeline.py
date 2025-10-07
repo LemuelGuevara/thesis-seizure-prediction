@@ -40,14 +40,11 @@ def main():
     set_seed()
     logger.info("Starting precomputation of STFTs for all patients")
 
-    precomputed_stfts_summary: list[dict[str, int]] = []
-
     with logging_redirect_tqdm(loggers=active_loggers):
         for patient in tqdm(DataConfig.patients_to_process, desc="Patients"):
             patient_id = f"{patient:02d}"
 
             logger.info(f"Processing patient {patient_id}")
-            precomputed_stfts_summary: list[dict[str, int]] = []
 
             """
                 Data Preparation
@@ -176,30 +173,31 @@ def main():
                     segmented_intervals=segmented_intervals,
                 )
 
-                precomputed_stfts_summary.append(
-                    {
-                        "patient_index": patient,
-                        "number_of_seizures": len(ictal_intervals),
-                        "preictal_intervals": phase_counts.get("preictal", 0),
-                        "interictal_intervals": phase_counts.get("interictal", 0),
-                    }
-                )
+                patient_stfts_summary = {
+                    "patient_id": patient_id,
+                    "number_of_seizures": len(ictal_intervals),
+                    "preictal_intervals": phase_counts.get("preictal", 0),
+                    "interictal_intervals": phase_counts.get("interictal", 0),
+                }
 
-    # Write to csv the summarized patient precomputed stfts
-    precomputed_stfts_summary_path = os.path.join(
-        DataConfig.precomputed_data_path, "precomputed_stfts_summary.csv"
-    )
-    fieldnames = [
-        "patient_index",
-        "number_of_seizures",
-        "preictal_intervals",
-        "interictal_intervals",
-    ]
-    export_to_csv(
-        path=precomputed_stfts_summary_path,
-        fieldnames=fieldnames,
-        data=precomputed_stfts_summary,
-    )
+            # Write to csv the summarized patient precomputed stfts
+            os.makedirs(DataConfig.runs_dir, exist_ok=True)
+
+            precomputed_stfts_summary_path = os.path.join(
+                DataConfig.runs_dir, "precomputed_stfts.csv"
+            )
+            fieldnames = [
+                "patient_id",
+                "number_of_seizures",
+                "preictal_intervals",
+                "interictal_intervals",
+            ]
+            export_to_csv(
+                path=precomputed_stfts_summary_path,
+                fieldnames=fieldnames,
+                data=[patient_stfts_summary],
+                mode="a",
+            )
 
 
 if __name__ == "__main__":
