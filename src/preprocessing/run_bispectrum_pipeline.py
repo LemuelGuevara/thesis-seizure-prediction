@@ -1,4 +1,4 @@
-from src.utils import is_precomputed_data_exists
+from src.utils import export_to_csv, is_precomputed_data_exists
 
 """
 Bispectrum Pipeline Module
@@ -116,11 +116,29 @@ def main():
 
                     processed_files += 1
 
+            precomputed_bis_summary = {
+                "patient_id": patient_id,
+                "mosaics": processed_files,
+            }
+
             logger.info(
                 f"Finished building time-frequency mosaics for patient {patient_id}"
             )
             logger.info(f"Total mosaics files created: {processed_files}")
             logger.info(f"Results saved in: {patient_bispectrum_dir}")
+
+            os.makedirs(DataConfig.runs_dir, exist_ok=True)
+
+            precomputed_tf_summary_path = os.path.join(
+                DataConfig.runs_dir, "precomputed_bis.csv"
+            )
+            fieldnames = ["patient_id", "mosaics"]
+            export_to_csv(
+                path=precomputed_tf_summary_path,
+                fieldnames=fieldnames,
+                data=[precomputed_bis_summary],
+                mode="a",
+            )
 
 
 if __name__ == "__main__":

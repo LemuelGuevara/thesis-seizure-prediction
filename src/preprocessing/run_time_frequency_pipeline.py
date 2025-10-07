@@ -14,7 +14,7 @@ from tqdm.contrib.logging import logging_redirect_tqdm
 from src.config import DataConfig
 from src.datatypes import StftStore
 from src.logger import get_all_active_loggers, setup_logger
-from src.utils import is_precomputed_data_exists
+from src.utils import export_to_csv, is_precomputed_data_exists
 
 from .data_transformation import build_epoch_mosaic, normalize_globally, resize_to_224
 from .loaders import load_precomputed_stfts
@@ -107,9 +107,27 @@ def main():
                     )
                     processed_files += 1
 
+            precomputed_tf_summary = {
+                "patient_id": patient_id,
+                "mosaics": processed_files,
+            }
+
             logger.info(f"Finished building mosaics for patient {patient_id}")
             logger.info(f"Total mosaics files created: {processed_files}")
             logger.info(f"Results saved in: {patient_time_frequency_dir}")
+
+            os.makedirs(DataConfig.runs_dir, exist_ok=True)
+
+            precomputed_tf_summary_path = os.path.join(
+                DataConfig.runs_dir, "precomputed_tf.csv"
+            )
+            fieldnames = ["patient_id", "mosaics"]
+            export_to_csv(
+                path=precomputed_tf_summary_path,
+                fieldnames=fieldnames,
+                data=[precomputed_tf_summary],
+                mode="a",
+            )
 
 
 if __name__ == "__main__":
