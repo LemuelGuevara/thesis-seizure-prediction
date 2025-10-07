@@ -84,8 +84,6 @@ def main():
             if combined_file_data:
                 durations = [interval.duration for interval in combined_file_data]
                 average_recording_duration = round(np.mean(durations))  # in hours
-            else:
-                average_recording_duration = 0
 
             logger.info(f"Average recording duration (s): {average_recording_duration}")
 
