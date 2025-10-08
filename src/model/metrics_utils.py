@@ -40,6 +40,9 @@ logger = setup_logger(name="metrics_utils")
 training_runs_dir = os.path.join(DataConfig.runs_dir, "training")
 os.makedirs(training_runs_dir, exist_ok=True)
 
+setup_dir = os.path.join(training_runs_dir, Trainconfig.setup_name)
+os.makedirs(setup_dir, exist_ok=True)
+
 
 def show_training_results(
     field_names: list[str], training_results: TrainingResults
@@ -85,9 +88,12 @@ def plot_training_loss(patient_train_loss: PatientTrainLoss) -> None:
     plt.grid(False)
     plt.xlim(0, 30)
 
+    patient_dir = os.path.join(setup_dir, f"patient_{patient_train_loss.patient_id}")
+    os.makedirs(patient_dir, exist_ok=True)
+
     # Save in runs/training with patient_id_timestamp.png
     filename = f"patient_{patient_train_loss.patient_id}_{patient_train_loss.timestamp}_loss_graph.png"
-    train_loss_path = os.path.join(training_runs_dir, filename)
+    train_loss_path = os.path.join(patient_dir, filename)
 
     plt.savefig(train_loss_path)
     plt.close()
@@ -119,8 +125,11 @@ def plot_confusion_matrix(
     plt.ylabel("True Label")
     plt.xlabel("Predicted Label")
 
+    patient_dir = os.path.join(setup_dir, f"patient_{patient_id}")
+    os.makedirs(patient_dir, exist_ok=True)
+
     filename = f"patient_{patient_id}_{timestamp}_cf_matrix.png"
-    cf_matrix_path = os.path.join(training_runs_dir, filename)
+    cf_matrix_path = os.path.join(patient_dir, filename)
 
     plt.savefig(cf_matrix_path)
     plt.close()
