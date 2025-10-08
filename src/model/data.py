@@ -129,9 +129,14 @@ def create_data_loader(tensor_dataset: TensorDataset) -> DataLoader:
         DataLoader: The created dataloader
     """
 
+    dataset_size = len(tensor_dataset)
+    batch_size = 32 if dataset_size < 1000 else 256
+
+    logger.info(f"TensorDataset size: {dataset_size}, using batch size: {batch_size}")
+
     return DataLoader(
         dataset=tensor_dataset,
-        batch_size=DataLoaderConfig.batch_size,
+        batch_size=batch_size,
         shuffle=DataLoaderConfig.shuffle,
         num_workers=DataLoaderConfig.num_workers,
         pin_memory=True,
