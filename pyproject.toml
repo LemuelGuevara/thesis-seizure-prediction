@@ -8,6 +8,7 @@ dependencies = [
     "fastapi>=0.118.0",
     "jupyterlab>=4.4.9",
     "jupyterlab-vim>=4.1.4",
+    "kaggle>=1.7.4.5",
     "matplotlib>=3.10.6",
     "mne>=1.10.1",
     "numpy>=2.3.3",
