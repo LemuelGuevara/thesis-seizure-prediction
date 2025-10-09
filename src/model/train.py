@@ -206,8 +206,8 @@ def main():
                 if early_stopping.best_score is not None:
                     fold_best_val = -float(early_stopping.best_score)
                     if fold_best_val < patient_best_val_loss:
-                        patient_best_val = fold_best_val
-                        torch.save(model.state_dict(), checkpoint_path)
+                        patient_best_val_loss = fold_best_val
+                        torch.save(model.state_dict(), saved_models_path)
 
                 if early_stopping.early_stop:
                     break
