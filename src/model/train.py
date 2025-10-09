@@ -17,10 +17,12 @@ from src.model.classification.multi_seizure_model import MultimodalSeizureModel
 from src.model.data import create_data_loader, get_loocv_fold, get_paired_dataset
 from src.model.early_stopping import EarlyStopping
 from src.model.metrics_utils import (
+    PatientTrainAccuracy,
     PatientTrainLoss,
     TrainingResults,
     export_training_results,
     plot_confusion_matrix,
+    plot_training_accuracy,
     plot_training_loss,
     show_training_results,
 )
@@ -89,6 +91,8 @@ def main():
             train_losses = []
             val_losses = []
 
+            train_accuracies, val_accuracies = [], []
+
             # Split train/test data through loocv
             (tf_train, bis_train, labels_train), (tf_test, bis_test, labels_test) = (
                 get_loocv_fold(
@@ -139,6 +143,7 @@ def main():
             for epoch in range(Trainconfig.num_epochs):
                 model.train()
                 epoch_loss = 0.0
+                train_correct, train_total = 0, 0
 
                 for batch_tf, batch_bis, batch_labels in tqdm(
                     train_loader, desc="Train Batches", leave=False
@@ -154,17 +159,24 @@ def main():
                         outputs = model(batch_tf, batch_bis)
                         loss = criterion(outputs, batch_labels)
 
+                    preds = torch.argmax(outputs, dim=1)
+                    train_correct += (preds == batch_labels).sum().item()
+                    train_total += batch_labels.size(0)
+
                     scaler.scale(loss).backward()
                     scaler.step(optimizer)
                     scaler.update()
 
                     epoch_loss += loss.item()
 
-                # Compute average training loss
+                # Compute average training loss and accuracy
                 avg_train_loss = epoch_loss / len(train_loader)
+                avg_train_acc = train_correct / train_total
 
                 model.eval()
                 val_loss = 0.0
+                all_val_preds, all_val_labels = [], []
+
                 with torch.no_grad():
                     for batch_tf, batch_bis, batch_labels in test_loader:
                         batch_tf = batch_tf.to(device, non_blocking=True)
@@ -176,12 +188,19 @@ def main():
                         val_loss += loss.item()
 
                         preds = torch.argmax(outputs, dim=1).cpu().numpy()
+                        all_val_preds.extend(preds)
+                        all_val_labels.extend(batch_labels.cpu().numpy())
+
                         all_preds.extend(preds)
                         all_labels.extend(batch_labels.cpu().numpy())
 
                 avg_val_loss = val_loss / len(test_loader)
+                avg_val_acc = accuracy_score(all_val_labels, all_val_preds)
+
                 train_losses.append(avg_train_loss)
                 val_losses.append(avg_val_loss)
+                train_accuracies.append(avg_train_acc)
+                val_accuracies.append(avg_val_acc)
 
                 early_stopping(avg_val_loss, model)
                 if early_stopping.best_score is not None:
@@ -196,7 +215,8 @@ def main():
                 logger.info(
                     f"[Patient {patient_id} | Fold {sample_idx + 1}] "
                     f"Epoch {epoch + 1}/{Trainconfig.num_epochs} "
-                    f"- avg_train_loss: {avg_train_loss:.4f} | avg_val_loss: {avg_val_loss:.4f}"
+                    f"- avg_train_loss: {avg_train_loss:.4f} | avg_val_loss: {avg_val_loss:.4f} "
+                    f"| avg_val_acc: {avg_val_acc:.4f}"
                 )
 
         accuracy = round(accuracy_score(all_labels, all_preds), 4)
@@ -233,6 +253,11 @@ def main():
         plot_training_loss(
             PatientTrainLoss(
                 patient_id, train_losses, val_losses, all_preds, all_labels, timestamp
+            )
+        )
+        plot_training_accuracy(
+            PatientTrainAccuracy(
+                patient_id, train_accuracies, val_accuracies, timestamp
             )
         )
 
