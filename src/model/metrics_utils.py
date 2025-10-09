@@ -67,26 +67,24 @@ def show_training_results(
 
 
 def plot_training_loss(patient_train_loss: PatientTrainLoss) -> None:
-    def smooth_curve(values: list[float], window_size: int = 3):
-        if len(values) < window_size:
-            return values
-        return np.convolve(values, np.ones(window_size) / window_size, mode="valid")
-
     plt.figure(figsize=(8, 5))
 
-    train_losses_smooth = smooth_curve(patient_train_loss.train_losses, window_size=5)
-    val_losses_smooth = smooth_curve(patient_train_loss.val_losses, window_size=5)
+    # Plot raw training and validation loss
+    plt.plot(
+        range(1, len(patient_train_loss.train_losses) + 1),
+        patient_train_loss.train_losses,
+        label="Train Loss",
+        color="tab:blue",
+        linewidth=2,
+    )
+    plt.plot(
+        range(1, len(patient_train_loss.val_losses) + 1),
+        patient_train_loss.val_losses,
+        label="Validation Loss",
+        color="tab:orange",
+        linewidth=2,
+    )
 
-    plt.plot(
-        range(1, len(train_losses_smooth) + 1),
-        train_losses_smooth,
-        label="Train Loss (smoothed)",
-    )
-    plt.plot(
-        range(1, len(val_losses_smooth) + 1),
-        val_losses_smooth,
-        label="Validation Loss (smoothed)",
-    )
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
     plt.title(
@@ -94,12 +92,11 @@ def plot_training_loss(patient_train_loss: PatientTrainLoss) -> None:
     )
     plt.legend()
     plt.grid(False)
-    plt.xlim(0, 30)
+    plt.xlim(0, max(len(patient_train_loss.train_losses), 30))
 
     patient_dir = os.path.join(setup_dir, f"patient_{patient_train_loss.patient_id}")
     os.makedirs(patient_dir, exist_ok=True)
 
-    # Save in runs/training with patient_id_timestamp.png
     filename = f"patient_{patient_train_loss.patient_id}_{patient_train_loss.timestamp}_loss_graph.png"
     train_loss_path = os.path.join(patient_dir, filename)
 
