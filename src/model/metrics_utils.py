@@ -6,7 +6,7 @@ import numpy as np
 import seaborn as sns
 from prettytable import PrettyTable
 
-from src.config import DataConfig, Trainconfig, config
+from src.config import DataConfig, Trainconfig
 from src.logger import setup_logger
 from src.utils import export_to_csv
 
@@ -24,6 +24,7 @@ class PatientTrainLoss:
 @dataclass
 class TrainingResults:
     patient_id: str
+    setup_name: str
     run_timestamp: str
     true_positives: int
     false_positives: int
@@ -160,6 +161,5 @@ def export_training_results(
         fieldnames=field_names,
         data=training_results_dicts,
         mode="a",
-        json_metadata=("config", config),
     )
     logger.info(f"Saved training results CSV to {training_results_path}")
