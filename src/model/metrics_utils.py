@@ -54,25 +54,15 @@ os.makedirs(setup_dir, exist_ok=True)
 
 
 def show_training_results(
-    field_names: list[str], training_results: TrainingResults
+    field_names: list[str], training_results: list["TrainingResults"]
 ) -> None:
     table = PrettyTable()
     table.field_names = field_names
-    table.title = f"Patient {training_results.patient_id} Training Results"
-    table.add_row(
-        [
-            training_results.patient_id,
-            Trainconfig.setup_name,
-            training_results.run_timestamp,
-            training_results.true_positives,
-            training_results.false_positives,
-            training_results.true_negatives,
-            training_results.false_negatives,
-            training_results.accuracy,
-            training_results.recall,
-            training_results.f1_score,
-        ]
-    )
+    table.title = "Patient Training Results"
+
+    for result in training_results:
+        table.add_row(list(asdict(result).values()))
+
     print(f"\n{table}")
 
 
