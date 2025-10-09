@@ -11,3 +11,4 @@ checkpoints/
 .ipynb_checkpoints/
 *.ipynb
 *.zip
+saved_models/
