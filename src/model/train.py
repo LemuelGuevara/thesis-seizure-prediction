@@ -61,13 +61,13 @@ def main():
         os.makedirs(log_dir, exist_ok=True)
         writer = SummaryWriter(log_dir=log_dir)
 
-        checkpoint_path = os.path.join(
+        saved_models_path = os.path.join(
             os.path.dirname(__file__),
-            "checkpoints",
+            "saved_models",
             f"patient_{patient_id}.pt",
         )
 
-        os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
+        os.makedirs(os.path.dirname(saved_models_path), exist_ok=True)
 
         # Get get paired dataset
         tf_features, bis_features, labels = get_paired_dataset(patient_id=patient_id)
