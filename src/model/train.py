@@ -243,11 +243,18 @@ def main():
         ]
 
         # Show training results in table format in the console
-        # NOTE: this is only for the current patient, not a list patient results
         training_results = TrainingResults(
-            patient_id, timestamp, TP, FP, TN, FN, accuracy, recall, f1
+            patient_id,
+            Trainconfig.setup_name,
+            timestamp,
+            TP,
+            FP,
+            TN,
+            FN,
+            accuracy,
+            recall,
+            f1,
         )
-        show_training_results(training_result_fieldnames, training_results)
 
         # Plot and save the training loss
         plot_training_loss(
@@ -266,7 +273,9 @@ def main():
 
         # Export training results into csv
         training_results_list.append(training_results)
-        export_training_results(training_result_fieldnames, training_results_list)
+        export_training_results(training_result_fieldnames, [training_results])
+
+    show_training_results(training_result_fieldnames, training_results_list)
 
 
 if __name__ == "__main__":
