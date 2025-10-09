@@ -22,6 +22,14 @@ class PatientTrainLoss:
 
 
 @dataclass
+class PatientTrainAccuracy:
+    patient_id: str
+    train_accuracies: list[float]
+    val_accuracies: list[float]
+    timestamp: str
+
+
+@dataclass
 class TrainingResults:
     patient_id: str
     setup_name: str
@@ -108,6 +116,46 @@ def plot_training_loss(patient_train_loss: PatientTrainLoss) -> None:
     plt.savefig(train_loss_path)
     plt.close()
     logger.info(f"Saved loss plot to {train_loss_path}")
+
+
+def plot_training_accuracy(patient_training_acc: PatientTrainAccuracy) -> None:
+    plt.figure(figsize=(8, 5))
+
+    # Plot raw training and validation accuracy
+    plt.plot(
+        range(1, len(patient_training_acc.train_accuracies) + 1),
+        patient_training_acc.train_accuracies,
+        label="Train Accuracy",
+        color="tab:blue",
+        linewidth=2,
+    )
+    plt.plot(
+        range(1, len(patient_training_acc.val_accuracies) + 1),
+        patient_training_acc.val_accuracies,
+        label="Validation Accuracy",
+        color="tab:orange",
+        linewidth=2,
+    )
+
+    plt.xlabel("Epoch")
+    plt.ylabel("Accuracy")
+    plt.title(
+        f"Accuracy Curve - Patient {patient_training_acc.patient_id} - {Trainconfig.setup_name}"
+    )
+    plt.legend()
+    plt.grid(False)
+    plt.xlim(0, max(len(patient_training_acc.train_accuracies), 30))
+    plt.ylim(0, 1)
+
+    patient_dir = os.path.join(setup_dir, f"patient_{patient_training_acc.patient_id}")
+    os.makedirs(patient_dir, exist_ok=True)
+
+    filename = f"patient_{patient_training_acc.patient_id}_{patient_training_acc.timestamp}_accuracy_graph.png"
+    acc_plot_path = os.path.join(patient_dir, filename)
+
+    plt.savefig(acc_plot_path)
+    plt.close()
+    logger.info(f"Saved accuracy plot to {acc_plot_path}")
 
 
 def plot_confusion_matrix(
