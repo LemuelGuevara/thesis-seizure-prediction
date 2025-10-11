@@ -12,6 +12,7 @@ from typing import cast
 
 import numpy as np
 from mne.io.base import BaseRaw, concatenate_raws
+from natsort import natsorted
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
@@ -116,7 +117,17 @@ def main():
                 f"Selected non-seizure files for interictal intervals: {cropped_no_seizure_filenames}"
             )
 
-            total_files = seizure_filenames + no_seizure_filenames
+            file_names = seizure_filenames + no_seizure_filenames
+            # We need to sort the filenames beacuse when then non-seizure file reduction
+            # clause in the run_precompute_stfts_pipeline has been activated, picking of non
+            # nonn-seiuze files is random therefore not maintaning the order of it in the list.
+            # And so once the filenames list has been passed into this function, the load order
+            # is no longer chronological. Which then once concatenated, the recording not in
+            # its natural order anymore. Natsorted is fuction from a module called natsort, it allows
+            # us to naturally sort objects e.g. chb01_01, cbh01_02, and so on.
+
+            sorted_file_names = natsorted(file_names)
+
             patient_stfts_dir = os.path.join(
                 DataConfig.precomputed_data_path, f"patient_{patient_id}", "stfts"
             )
@@ -133,7 +144,7 @@ def main():
                     phase_counts[epoch.phase] = phase_counts.get(epoch.phase, 0) + 1
             else:
                 # 2. Loading patient recordings and concatenating all recordings into 1 continuous recording
-                raw_recordings = load_raw_recordings(patient_id, total_files)
+                raw_recordings = load_raw_recordings(patient_id, sorted_file_names)
                 raw_concatenated = cast(
                     BaseRaw, concatenate_raws(raw_recordings, preload=False)
                 )
