@@ -109,8 +109,6 @@ def main():
                         file.file_name for file in cropped_no_seizure_files
                     ]
 
-                combined_intervals = preictal_intervals + filtered_interictal_intervals
-
                 logger.info(
                     f"Keeping {len(cropped_no_seizure_files)} of {len(no_seizure_files_data)} non-seizure files "
                     f"with {len(filtered_interictal_intervals)} interictal intervals"
@@ -118,6 +116,8 @@ def main():
                 logger.info(
                     f"Selected non-seizure files for interictal intervals: {cropped_no_seizure_filenames}"
                 )
+
+            combined_intervals = preictal_intervals + filtered_interictal_intervals
 
             file_names = seizure_filenames + no_seizure_filenames
             # We need to sort the filenames beacuse when then non-seizure file reduction
