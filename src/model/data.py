@@ -98,21 +98,34 @@ def get_loocv_fold(
     bis_test = bis_tensor[~mask]
     labels_test = labels_tensor[~mask]
 
-    # (optional) undersampling still supported
     if undersample:
         unique, counts = torch.unique(labels_train, return_counts=True)
-        minority = torch.argmin(counts)
-        minority_count = counts[minority].item()
+        class_counts = dict(zip(unique.tolist(), counts.tolist()))
+        logger.info(f"Original training set class distribution: {class_counts}")
 
-        indices_min = torch.where(labels_train == minority)[0]
-        indices_maj = torch.where(labels_train != minority)[0]
+        minority = torch.argmin(counts)
+        minority_class = unique[minority].item()
+        minority_count = counts[minority].item()
+        logger.info(f"Minority class: {minority_class} (count: {minority_count})")
+
+        indices_min = torch.where(labels_train == minority_class)[0]
+        indices_maj = torch.where(labels_train != minority_class)[0]
+        logger.info(
+            f"Majority class indices: {len(indices_maj)}, Minority class indices: {len(indices_min)}"
+        )
+
         sampled_maj = indices_maj[torch.randperm(len(indices_maj))[:minority_count]]
+
         idx = torch.cat((indices_min, sampled_maj))
         tf_train, bis_train, labels_train = (
             tf_train[idx],
             bis_train[idx],
             labels_train[idx],
         )
+
+        unique_new, counts_new = torch.unique(labels_train, return_counts=True)
+        new_class_counts = dict(zip(unique_new.tolist(), counts_new.tolist()))
+        logger.info(f"Undersampled training set class distribution: {new_class_counts}")
 
     return (tf_train, bis_train, labels_train), (tf_test, bis_test, labels_test)
 
