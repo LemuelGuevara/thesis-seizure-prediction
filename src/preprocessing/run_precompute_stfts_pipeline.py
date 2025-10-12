@@ -85,37 +85,39 @@ def main():
 
             logger.info(f"Average recording duration (s): {average_recording_duration}")
 
-            # We only do non-seizure file reduction when the average recording time
-            # of the patient is above 3600s (or 2hr)
-            if average_recording_duration > 7200:
-                # Filter interictal intervals to only include the files we want to keep
-                num_to_keep = len(ictal_intervals)
-                cropped_no_seizure_files = random.sample(
-                    no_seizure_files_data, min(num_to_keep, len(no_seizure_files_data))
+            if DataConfig.non_seizure_file_reduction:
+                # We only do non-seizure file reduction when the average recording time
+                # of the patient is above 3600s (or 2hr)
+                if average_recording_duration > 7200:
+                    # Filter interictal intervals to only include the files we want to keep
+                    num_to_keep = len(ictal_intervals)
+                    cropped_no_seizure_files = random.sample(
+                        no_seizure_files_data,
+                        min(num_to_keep, len(no_seizure_files_data)),
+                    )
+                    cropped_no_seizure_filenames = {
+                        file.file_name for file in cropped_no_seizure_files
+                    }
+                    # Only keep interictal intervals from the cropped file list
+                    filtered_interictal_intervals = [
+                        interval
+                        for interval in interictal_intervals
+                        if interval.file_name in cropped_no_seizure_filenames
+                    ]
+
+                    no_seizure_filenames = [
+                        file.file_name for file in cropped_no_seizure_files
+                    ]
+
+                combined_intervals = preictal_intervals + filtered_interictal_intervals
+
+                logger.info(
+                    f"Keeping {len(cropped_no_seizure_files)} of {len(no_seizure_files_data)} non-seizure files "
+                    f"with {len(filtered_interictal_intervals)} interictal intervals"
                 )
-                cropped_no_seizure_filenames = {
-                    file.file_name for file in cropped_no_seizure_files
-                }
-                # Only keep interictal intervals from the cropped file list
-                filtered_interictal_intervals = [
-                    interval
-                    for interval in interictal_intervals
-                    if interval.file_name in cropped_no_seizure_filenames
-                ]
-
-                no_seizure_filenames = [
-                    file.file_name for file in cropped_no_seizure_files
-                ]
-
-            combined_intervals = preictal_intervals + filtered_interictal_intervals
-
-            logger.info(
-                f"Keeping {len(cropped_no_seizure_files)} of {len(no_seizure_files_data)} non-seizure files "
-                f"with {len(filtered_interictal_intervals)} interictal intervals"
-            )
-            logger.info(
-                f"Selected non-seizure files for interictal intervals: {cropped_no_seizure_filenames}"
-            )
+                logger.info(
+                    f"Selected non-seizure files for interictal intervals: {cropped_no_seizure_filenames}"
+                )
 
             file_names = seizure_filenames + no_seizure_filenames
             # We need to sort the filenames beacuse when then non-seizure file reduction

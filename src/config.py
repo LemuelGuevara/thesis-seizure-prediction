@@ -24,6 +24,9 @@ class DataConfig:
     )
     patients_to_process: ClassVar[list[int]] = config["data"]["patients_to_process"]
     runs_dir: ClassVar[str] = config["data"]["runs_dir"]
+    non_seizure_file_reduction: ClassVar[bool] = config["data"][
+        "non_seizure_file_reduction"
+    ]
 
 
 @dataclass
