@@ -4,6 +4,7 @@ from datetime import datetime
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.optim.lr_scheduler as lr_scheduler
 from sklearn.metrics import accuracy_score, confusion_matrix, f1_score, recall_score
 from torch.amp import GradScaler, autocast
 from torch.utils.data import TensorDataset
@@ -135,7 +136,18 @@ def main():
             else:
                 criterion = nn.CrossEntropyLoss()
 
-            optimizer = optim.Adam(model.parameters(), lr=Trainconfig.lr)
+            optimizer = optim.Adam(
+                model.parameters(), lr=Trainconfig.lr, weight_decay=1e-4
+            )
+            scheduler = lr_scheduler.ReduceLROnPlateau(
+                optimizer,
+                mode="min",
+                factor=0.5,
+                patience=2,
+                cooldown=1,
+                min_lr=1e-6,
+            )
+
             scaler = GradScaler(device.type)
             early_stopping = EarlyStopping()
 
@@ -201,6 +213,8 @@ def main():
                 val_losses.append(avg_val_loss)
                 train_accuracies.append(avg_train_acc)
                 val_accuracies.append(avg_val_acc)
+
+                scheduler.step(val_loss)
 
                 early_stopping(avg_val_loss, model)
                 if early_stopping.best_score is not None:
