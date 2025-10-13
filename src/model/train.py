@@ -136,17 +136,21 @@ def main():
             else:
                 criterion = nn.CrossEntropyLoss()
 
-            optimizer = optim.Adam(
-                model.parameters(), lr=Trainconfig.lr, weight_decay=1e-4
-            )
-            scheduler = lr_scheduler.ReduceLROnPlateau(
-                optimizer,
-                mode="min",
-                factor=0.5,
-                patience=2,
-                cooldown=1,
-                min_lr=1e-6,
-            )
+            if Trainconfig.use_lr_scheduler:
+                logger.info("Using learning rate scheduler")
+                optimizer = optim.Adam(
+                    model.parameters(), lr=Trainconfig.lr, weight_decay=1e-4
+                )
+                scheduler = lr_scheduler.ReduceLROnPlateau(
+                    optimizer,
+                    mode="min",
+                    factor=0.5,
+                    patience=2,
+                    cooldown=1,
+                    min_lr=1e-6,
+                )
+            else:
+                optimizer = optim.Adam(model.parameters(), lr=Trainconfig.lr)
 
             scaler = GradScaler(device.type)
             early_stopping = EarlyStopping()
@@ -214,7 +218,8 @@ def main():
                 train_accuracies.append(avg_train_acc)
                 val_accuracies.append(avg_val_acc)
 
-                scheduler.step(avg_val_loss)
+                if Trainconfig.use_lr_scheduler:
+                    scheduler.step(avg_val_loss)
 
                 early_stopping(avg_val_loss, model)
                 if early_stopping.best_score is not None:

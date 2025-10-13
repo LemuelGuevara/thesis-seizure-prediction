@@ -107,6 +107,7 @@ class DataLoaderConfig:
 class Trainconfig:
     num_epochs: ClassVar[int] = train_toml["num_epochs"]
     lr: ClassVar[float] = train_toml["lr"]
+    use_lr_scheduler: ClassVar[bool] = train_toml["use_lr_scheduler"]
     use_cbam: ClassVar[bool] = train_toml["use_cbam"]
     undersample: ClassVar[bool] = train_toml["undersample"]
     gated: ClassVar[bool] = train_toml["gated"]
