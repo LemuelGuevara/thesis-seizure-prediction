@@ -214,7 +214,7 @@ def main():
                 train_accuracies.append(avg_train_acc)
                 val_accuracies.append(avg_val_acc)
 
-                scheduler.step(val_loss)
+                scheduler.step(avg_val_loss)
 
                 early_stopping(avg_val_loss, model)
                 if early_stopping.best_score is not None:
