@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.118.0",
+    "h5py>=3.15.0",
     "jupyterlab>=4.4.9",
     "jupyterlab-vim>=4.1.4",
     "kaggle>=1.7.4.5",
@@ -15,6 +16,7 @@ dependencies = [
     "numpy>=2.3.3",
     "pandas>=2.3.3",
     "prettytable>=3.16.0",
+    "pybispectra>=1.2.3",
     "pyqt5>=5.15.11",
     "scikit-learn>=1.7.2",
     "scipy>=1.16.2",
@@ -22,6 +24,7 @@ dependencies = [
     "tensorboard>=2.20.0",
     "toml>=0.10.2",
     "torch>=2.8.0",
+    "torchinfo>=1.8.0",
     "torchvision>=0.23.0",
     "tqdm>=4.67.1",
 ]
