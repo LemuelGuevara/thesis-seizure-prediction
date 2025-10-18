@@ -125,6 +125,7 @@ def compute_bispectrum_estimation(
         np.abs(freqs[left] - targets) <= np.abs(freqs[right] - targets), left, right
     )
     sum_idx = np.where(targets <= freqs[-1], nearest, -1).astype(int)
+    sum_idx = np.clip(sum_idx, 0, Zxx.shape[0] - 1)
     logger.debug("Computed nearest frequency indices for all band pairs.")
 
     conj_Zxx = np.conjugate(Zxx)

@@ -16,7 +16,7 @@ from natsort import natsorted
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
-from src.config import DataConfig
+from src.config import DataConfig, PreprocessingConfig
 from src.logger import get_all_active_loggers, setup_logger
 from src.preprocessing.data_transformation import precompute_stfts
 from src.utils import (
@@ -88,26 +88,25 @@ def main():
             if DataConfig.non_seizure_file_reduction:
                 # We only do non-seizure file reduction when the average recording time
                 # of the patient is above 3600s (or 2hr)
-                if average_recording_duration > 7200:
-                    # Filter interictal intervals to only include the files we want to keep
-                    num_to_keep = len(ictal_intervals)
-                    cropped_no_seizure_files = random.sample(
-                        no_seizure_files_data,
-                        min(num_to_keep, len(no_seizure_files_data)),
-                    )
-                    cropped_no_seizure_filenames = {
-                        file.file_name for file in cropped_no_seizure_files
-                    }
-                    # Only keep interictal intervals from the cropped file list
-                    filtered_interictal_intervals = [
-                        interval
-                        for interval in interictal_intervals
-                        if interval.file_name in cropped_no_seizure_filenames
-                    ]
+                # Filter interictal intervals to only include the files we want to keep
+                num_to_keep = len(ictal_intervals)
+                cropped_no_seizure_files = random.sample(
+                    no_seizure_files_data,
+                    min(num_to_keep, len(no_seizure_files_data)),
+                )
+                cropped_no_seizure_filenames = {
+                    file.file_name for file in cropped_no_seizure_files
+                }
+                # Only keep interictal intervals from the cropped file list
+                filtered_interictal_intervals = [
+                    interval
+                    for interval in interictal_intervals
+                    if interval.file_name in cropped_no_seizure_filenames
+                ]
 
-                    no_seizure_filenames = [
-                        file.file_name for file in cropped_no_seizure_files
-                    ]
+                no_seizure_filenames = [
+                    file.file_name for file in cropped_no_seizure_files
+                ]
 
                 logger.info(
                     f"Keeping {len(cropped_no_seizure_files)} of {len(no_seizure_files_data)} non-seizure files "
@@ -167,8 +166,26 @@ def main():
                 # 1. Filtering
                 filtered_recording = apply_filters(loaded_raw)
 
+                for interval in preictal_intervals:
+                    duration_sec = interval.end - interval.start
+                    logger.info(
+                        f"Preictal {interval.seizure_id}: "
+                        f"start={interval.start}, end={interval.end}, duration={duration_sec}s"
+                    )
+
                 # 2. 30-second epoch segmentation
                 segmented_intervals = segment_intervals(combined_intervals)
+
+                seizure_ids_present = [
+                    epoch.seizure_id if epoch.seizure_id is not None else -1
+                    for epoch in segmented_intervals
+                ]
+
+                unique_ids = sorted(set(seizure_ids_present))
+                logger.info(
+                    f"Segmented {len(segmented_intervals)} epochs: Unique seizure IDs: {unique_ids}, "
+                    f"Missing IDs (-1/None): {seizure_ids_present.count(-1)}"
+                )
 
                 # Removed the loadded raw recording after filtering to save ram.
                 # The filtered recording will then be loaded again in the precompute stfts epoch
@@ -184,6 +201,7 @@ def main():
                     recording=filtered_recording,
                     patient_stfts_dir=patient_stfts_dir,
                     segmented_intervals=segmented_intervals,
+                    normalize_power=PreprocessingConfig.normalize_power,
                 )
 
                 patient_stfts_summary = {

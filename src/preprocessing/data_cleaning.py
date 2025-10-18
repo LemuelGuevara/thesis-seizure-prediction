@@ -71,6 +71,7 @@ def extract_seizure_intervals(
     pending_seizure_start = None
     file_start = None
     file_end = None
+    seizure_counter = 0
 
     for line in patient_summary:
         # In order to get the preictal and interictal intervals, we need to loop through the
@@ -78,6 +79,11 @@ def extract_seizure_intervals(
         # and seizure end time that would determine the file start, file end, and the
         # seizures themselves. Then a seizure array will be used to store when the seizures started
         # which will be used to find the preictals and interictals.
+
+        # Interictal intervals are chonsen on PURELY NON-SEIZURE files, meaning they do not contain
+        # any seizure at all. So we will not be extracting interictals from files that have seizures
+        # on them because we want the interictal intervals to be pure and totally have normal brain
+        # activity.
 
         line = line.strip()
 
@@ -96,6 +102,7 @@ def extract_seizure_intervals(
                     start=0,
                     end=duration_seconds,
                     file_name=file_name,
+                    seizure_id=-1,
                 )
                 interictal_intervals.append(interval)
                 no_seizure_files_data.append(
@@ -117,26 +124,34 @@ def extract_seizure_intervals(
                 start=pending_seizure_start,
                 end=end_sec,
                 file_name=file_name,
+                seizure_id=seizure_counter,
             )
             seizure_files_data.append(
                 IntervalFileInfo(file_name, ictal_interval, duration_seconds)
             )
             ictal_intervals.append(ictal_interval)
             pending_seizure_start = None
+            seizure_counter += 1
 
     assert file_start is not None, "file_start cannot be None"
     assert file_end is not None, "file_end cannot be None"
 
     current_start = file_start
-    for seizure_idx, seizure in enumerate(ictal_intervals, 1):
+    for seizure_idx in range(len(ictal_intervals)):
         # Since the file start and times are in datatime format, in order to get the
         # absolute datetimes of the seizure start/end from seconds, conversion has by using
         # timedelta and adding it to the file_start datetime.
+        seizure = ictal_intervals[seizure_idx]
 
         seizure_start_time = file_start + timedelta(seconds=seizure.start)
         seizure_end_time = file_start + timedelta(seconds=seizure.end)
         preictal_start_time = seizure_start_time - timedelta(
             minutes=PreprocessingConfig.preictal_minutes
+        )
+
+        logger.info(
+            f"Preictal {seizure.seizure_id}: start={preictal_start_time}, end={seizure_start_time}, "
+            f"duration={(seizure_start_time - preictal_start_time).total_seconds() / 60:.1f} min"
         )
 
         logger.debug(
@@ -146,43 +161,22 @@ def extract_seizure_intervals(
         )
 
         # We need to make sure that our times will never be negative
-        if preictal_start_time < current_start:
-            preictal_start_time = current_start
-        if preictal_start_time >= seizure_start_time:
-            preictal_start_time = file_start
-
-        # Interictal before preictal
-        if preictal_start_time > current_start:
-            interictal_intervals.append(
-                EpochInterval(
-                    phase="interictal",
-                    start=int((current_start - file_start).total_seconds()),
-                    end=int((preictal_start_time - file_start).total_seconds()),
-                    file_name=file_name,
-                )
-            )
+        preictal_start_sec = int((preictal_start_time - file_start).total_seconds())
+        seizure_start_sec = int((seizure_start_time - file_start).total_seconds())
+        if preictal_start_sec < 0:
+            preictal_start_sec = 0
 
         preictal_intervals.append(
             EpochInterval(
                 phase="preictal",
-                start=int((preictal_start_time - file_start).total_seconds()),
-                end=int((seizure_start_time - file_start).total_seconds()),
+                start=preictal_start_sec,
+                end=seizure_start_sec,
                 file_name=file_name,
+                seizure_id=seizure.seizure_id,
             )
         )
 
         current_start = seizure_end_time
-
-    # Interictal after last seizure
-    if file_end is not None and current_start < file_end:
-        interictal_intervals.append(
-            EpochInterval(
-                phase="interictal",
-                start=int((current_start - file_start).total_seconds()),
-                end=int((file_end - file_start).total_seconds()),
-                file_name=file_name,
-            )
-        )
 
     return (
         preictal_intervals,
@@ -216,7 +210,7 @@ def load_raw_recordings(patient_id: str, file_names: list[str]) -> list[BaseRaw]
         file_names, desc=f"Reading EDF files for patient {patient_id}"
     ):
         recording_path = os.path.join(patient_folder, file_name)
-        logger.debug(f"Reading file: {file_name}")
+        logger.info(f"Reading file: {file_name}")
 
         raw_edf = mne.io.read_raw_edf(recording_path, preload=False, verbose="error")
         raw_channels = set(raw_edf.ch_names)
@@ -306,6 +300,7 @@ def segment_intervals(
                     start=current_start,
                     end=window_end,
                     phase=interval.phase,
+                    seizure_id=interval.seizure_id,
                 )
             )
             interval_windows += 1

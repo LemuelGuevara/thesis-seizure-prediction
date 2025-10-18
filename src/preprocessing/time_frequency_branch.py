@@ -8,12 +8,37 @@ NOTE: STFT related that will be passed in the functions will be the precomputed 
 """
 
 import numpy as np
+from PIL import Image
 
 from src.config import PreprocessingConfig
 from src.datatypes import BandTimeStore, StftStore
 from src.logger import setup_logger
 
 logger = setup_logger(name="time_frequency_branch")
+
+
+def build_stft_spectrogram(stft_db: np.ndarray, final_size=(224, 224)) -> np.ndarray:
+    """
+    Build a vertically stacked spectrogram from multiple channels and resize to final_size.
+    Returns a (final_h, final_w) numpy float32 image.
+    """
+    num_channels, freq, time = stft_db.shape
+    final_h, final_w = final_size
+
+    canvas = np.zeros((final_h, final_w), dtype=np.float32)
+
+    # Compute exact row boundaries per channel
+    row_edges = np.linspace(0, final_h, num_channels + 1, dtype=int)
+
+    for i in range(num_channels):
+        img = stft_db[i]
+        pil_img = Image.fromarray(img)
+        row_h = row_edges[i + 1] - row_edges[i]
+        pil_img = pil_img.resize((final_w, row_h), Image.Resampling.BICUBIC)
+
+        canvas[row_edges[i] : row_edges[i + 1], :] = np.array(pil_img, dtype=np.float32)
+
+    return canvas
 
 
 def group_power_into_bands(

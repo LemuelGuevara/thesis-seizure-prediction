@@ -1,11 +1,12 @@
 """
-Time-Frquency Pipeline Module
+Time-Frequency Pipeline Module
 
-This module is the main module for piecing togother all the functions that are needed to process
+This module is the main module for piecing together all the functions that are needed to process
 the time-frequency features and extract them into mosaic tensor.
 """
 
 import os
+from typing import cast
 
 import numpy as np
 from tqdm import tqdm
@@ -14,11 +15,12 @@ from tqdm.contrib.logging import logging_redirect_tqdm
 from src.config import DataConfig
 from src.datatypes import StftStore
 from src.logger import get_all_active_loggers, setup_logger
-from src.utils import export_to_csv, is_precomputed_data_exists
+from src.preprocessing.data_transformation import (
+    resize_to_224,
+)
+from src.utils import is_precomputed_data_exists
 
-from .data_transformation import build_epoch_mosaic, normalize_globally, resize_to_224
 from .loaders import load_precomputed_stfts
-from .time_frequency_branch import create_band_groupings_per_channel
 
 logger = setup_logger(name="time_frequency_pipeline")
 active_loggers = get_all_active_loggers()
@@ -28,8 +30,7 @@ def main():
     """
     Data Preprocessing
     - Data transformation for time-frequency branch
-        - Band groupings per channel
-        - Mosaic for STFT matrix
+        - Reduce channels: R=mean, G=max, B=std
         - Global normalization
         - Resize to 224x224x3
         - Save to npz
@@ -57,63 +58,60 @@ def main():
                 )
                 continue
 
-            # 1. Load precomputed stfts
-            stfts_by_channel: dict[str, list[StftStore]] = load_precomputed_stfts(
-                patient_stfts_dir
-            )
+            # 1. Load precomputed stfts (all channels)
+            loaded_stfts = load_precomputed_stfts(patient_stfts_dir)
 
-            # 2. Band groupings per channel
-            band_maps = create_band_groupings_per_channel(stfts_by_channel)
+            # stft_spec = [stft.stft_db for stft in loaded_stfts]
+            # stft_spec_global_min = np.min([np.abs(z).min() for z in stft_spec])
+            # stft_spec_global_max = np.max([np.abs(z).max() for z in stft_spec])
 
-            # Get epochs from first channel
-            first_channel_epochs = next(iter(stfts_by_channel.values()))
-            n_epochs = len(first_channel_epochs)
-
-            # 3. Iterate over epochs and build mosaics
-            processed_files = 0
-            for epoch_idx in tqdm(
-                range(n_epochs),
-                desc=f"Processing epochs for patient {patient_id}",
-                leave=False,
+            # 3. Process each window
+            for idx, stft in enumerate(
+                tqdm(loaded_stfts, desc="Processing epochs", leave=False)
             ):
-                epoch_meta: StftStore = first_channel_epochs[epoch_idx]
+                stft = cast(StftStore, stft)
+                stft_feat = stft.stft_db
 
-                mosaic, mode = build_epoch_mosaic(
-                    epoch_idx=epoch_idx,
-                    mode="tf_band",
-                    band_maps=band_maps,
-                    stfts_by_channel=stfts_by_channel,
+                if stft_feat.shape[0] > 3:
+                    logger.info(f"Averaging across all {stft_feat.shape[0]}")
+                    stft_feat_mean = np.mean(stft_feat, axis=0)
+                else:
+                    stft_feat_mean = stft_feat
+
+                freqs = stft.freqs
+
+                logger.info(
+                    f"STFT freqs range: {freqs.min():.2f}-{freqs.max():.2f} Hz, len={len(freqs)}"
                 )
 
-                # 4. Global normalization
-                normalized = normalize_globally(mosaic)
+                # stft_feat_mean_norm = stft_feat_mean / (stft_spec_global_max + 1e-10)
 
-                # 5. Resize to 224x224x3
-                resized = resize_to_224(normalized)
+                # 6. Resize to 224x224x3
+                resized = resize_to_224(stft_feat_mean)
 
-                # 6. Save to npz
+                logger.info(f"After resize: resized shape = {resized.shape}")
+
+                # 7. Save to npz
                 filename = os.path.join(
                     patient_time_frequency_dir,
-                    f"{epoch_meta.phase}_{mode}_{epoch_meta.start}_{epoch_meta.end}.npz",
+                    f"{stft.phase}_tf_{idx:06d}.npz",
                 )
 
                 if not os.path.exists(filename):
                     np.savez_compressed(
                         filename,
                         tensor=resized,
-                        start=epoch_meta.start,
-                        end=epoch_meta.end,
-                        phase=epoch_meta.phase,
+                        start=stft.start,
+                        end=stft.end,
+                        phase=stft.phase,
+                        freqs=stft.freqs,
+                        seizure_id=stft.seizure_id,
+                        n_channels=stft.stft_db.shape[0],
                     )
-                    processed_files += 1
 
-            precomputed_tf_summary = {
-                "patient_id": patient_id,
-                "mosaics": processed_files,
-            }
-
-            logger.info(f"Finished building mosaics for patient {patient_id}")
-            logger.info(f"Total mosaics files created: {processed_files}")
+            logger.info(
+                f"Finished building time-frequency mosaics for patient {patient_id}"
+            )
             logger.info(f"Results saved in: {patient_time_frequency_dir}")
 
             os.makedirs(DataConfig.runs_dir, exist_ok=True)
@@ -122,12 +120,6 @@ def main():
                 DataConfig.runs_dir, "precomputed_tf.csv"
             )
             fieldnames = ["patient_id", "mosaics"]
-            export_to_csv(
-                path=precomputed_tf_summary_path,
-                fieldnames=fieldnames,
-                data=[precomputed_tf_summary],
-                mode="a",
-            )
 
 
 if __name__ == "__main__":

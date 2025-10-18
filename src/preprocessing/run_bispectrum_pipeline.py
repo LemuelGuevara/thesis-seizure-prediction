@@ -1,5 +1,3 @@
-from src.utils import export_to_csv, is_precomputed_data_exists
-
 """
 Bispectrum Pipeline Module
 
@@ -8,6 +6,7 @@ the bispectrum features and extract them into mosaic tensor.
 """
 
 import os
+from typing import cast
 
 import numpy as np
 from tqdm import tqdm
@@ -16,11 +15,10 @@ from tqdm.contrib.logging import logging_redirect_tqdm
 from src.config import DataConfig
 from src.datatypes import StftStore
 from src.logger import get_all_active_loggers, setup_logger
+from src.preprocessing.bispectrum_branch import compute_bispectrum_estimation
+from src.preprocessing.data_transformation import resize_to_224
+from src.utils import is_precomputed_data_exists
 
-from .bispectrum_branch import (
-    compute_bispectrum_estimation,
-)
-from .data_transformation import build_epoch_mosaic, normalize_globally, resize_to_224
 from .loaders import load_precomputed_stfts
 
 logger = setup_logger(name="bispectrum_pipeline")
@@ -57,74 +55,52 @@ def main():
                 continue
 
             # 1. Load precomputed STFTs
-            stfts_by_channel: dict[str, list[StftStore]] = load_precomputed_stfts(
-                patient_stfts_dir
-            )
+            loaded_stfts = load_precomputed_stfts(patient_stfts_dir)
 
-            epochs_first_channel = next(iter(stfts_by_channel.values()))
-            n_epochs = len(epochs_first_channel)
+            all_zxx = [stft.Zxx for stft in loaded_stfts]
+            zxx_global_min = np.min([np.abs(z).min() for z in all_zxx])
+            zxx_global_max = np.max([np.abs(z).max() for z in all_zxx])
 
-            processed_files = 0
-
-            for epoch_idx in tqdm(
-                range(n_epochs), desc=f"Processing epochs for patient {patient_id}"
+            for idx, stft in enumerate(
+                tqdm(loaded_stfts, desc="Processing epochs", leave=False)
             ):
+                stft = cast(StftStore, stft)
+                Zxx = stft.Zxx  # (C, F, T)
+                freqs = stft.freqs
+                # Zxx_norm = stft.Zxx / (zxx_global_max + 1e-10)
+
                 # 2–3. Compute bispectrum per channel*
-                bispectra_db: list[np.ndarray] = []
-                for ch_name, epochs in stfts_by_channel.items():
-                    epoch_meta: StftStore = epochs[epoch_idx]
+                bis_list = []
+                for ch in range(Zxx.shape[0]):
+                    _, bis_db = compute_bispectrum_estimation(Zxx=Zxx[ch], freqs=freqs)
+                    bis_list.append(bis_db)
 
-                    _, bispectrum_db = compute_bispectrum_estimation(
-                        Zxx=epoch_meta.Zxx,
-                        freqs=epoch_meta.freqs,
-                    )
+                bispectrum_db_avg = np.mean(bis_list, axis=0)
 
-                    bispectra_db.append(bispectrum_db)
-
-                # stack into (n_channels, n_bands, n_bands)
-                bispectra_db = np.stack(bispectra_db, axis=0)
-
-                # 4. Build per-epoch mosaic
-                mosaic, mode = build_epoch_mosaic(
-                    epoch_idx=epoch_idx,
-                    mode="bispectrum",
-                    stfts_by_channel=stfts_by_channel,
-                    bispectrum_arr_list=bispectra_db,
-                )
-
-                # 5. Global normalization
-                normalized = normalize_globally(data=mosaic)
-
-                # 6. Resize to 224x224x3
-                resized = resize_to_224(normalized)
+                # 4. Resize to 224x224x3
+                resized = resize_to_224(bispectrum_db_avg)
 
                 # 7. Save to npz
-                epoch_meta = epochs_first_channel[epoch_idx]
                 filename = os.path.join(
                     patient_bispectrum_dir,
-                    f"{epoch_meta.phase}_bispectrum_{epoch_meta.start}_{epoch_meta.end}.npz",
+                    f"{stft.phase}_bispectrum_{idx:06d}.npz",
                 )
 
                 if not os.path.exists(filename):
                     np.savez_compressed(
                         filename,
                         tensor=resized,
-                        start=epoch_meta.start,
-                        end=epoch_meta.end,
-                        phase=epoch_meta.phase,
+                        start=stft.start,
+                        end=stft.end,
+                        phase=stft.phase,
+                        freqs=stft.freqs,
+                        seizure_id=stft.seizure_id,
+                        n_channels=stft.Zxx.shape[0],
                     )
-
-                    processed_files += 1
-
-            precomputed_bis_summary = {
-                "patient_id": patient_id,
-                "mosaics": processed_files,
-            }
 
             logger.info(
                 f"Finished building time-frequency mosaics for patient {patient_id}"
             )
-            logger.info(f"Total mosaics files created: {processed_files}")
             logger.info(f"Results saved in: {patient_bispectrum_dir}")
 
             os.makedirs(DataConfig.runs_dir, exist_ok=True)
@@ -133,12 +109,6 @@ def main():
                 DataConfig.runs_dir, "precomputed_bis.csv"
             )
             fieldnames = ["patient_id", "mosaics"]
-            export_to_csv(
-                path=precomputed_tf_summary_path,
-                fieldnames=fieldnames,
-                data=[precomputed_bis_summary],
-                mode="a",
-            )
 
 
 if __name__ == "__main__":

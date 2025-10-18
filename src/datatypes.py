@@ -16,6 +16,7 @@ class EpochInterval:
     duration: Optional[int] = None
     windows_created: Optional[int] = None
     file_name: Optional[str] = None
+    seizure_id: Optional[int] = None
 
 
 @dataclass

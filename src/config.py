@@ -27,6 +27,9 @@ class DataConfig:
     non_seizure_file_reduction: ClassVar[bool] = config["data"][
         "non_seizure_file_reduction"
     ]
+    interictal_undersampling: ClassVar[bool] = config["data"][
+        "interictal_undersampling"
+    ]
 
 
 @dataclass
@@ -50,6 +53,10 @@ class PreprocessingConfig:
     ]
     band_defs: ClassVar[dict[str, list[float]]] = config["preprocessing"]["band_defs"]
     thread_max_workers: ClassVar[int] = os.cpu_count() or 1
+    decomposer_type: ClassVar[Literal["pca", "ica"]] = config["preprocessing"][
+        "decomposer_type"
+    ]
+    normalize_power: ClassVar[bool] = config["preprocessing"]["normalize_power"]
 
 
 @dataclass
