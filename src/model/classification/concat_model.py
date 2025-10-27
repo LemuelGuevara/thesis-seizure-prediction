@@ -38,7 +38,7 @@ class ConcatModel(nn.Module):
 
         fused_feat = torch.cat([tf_feat_flat, bis_feat_flat], dim=1)  # [B, 2560]
         fused_feat = (
-            fused_feat.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, 7, 7)
+            fused_feat.unsqueeze(-1).unsqueeze(-1).repeat(-1, -1, 7, 7)
         )  # [B, 2560, 7, 7]
 
         logits = self.attention_pool(fused_feat)
