@@ -1,59 +1,56 @@
 """
 Loaders module
 
-This module is util module used for creating loader functions that can be reused across other
+This module is a utility for creating loader functions that can be reused across other
 modules.
 """
 
 import os
 
+import h5py
 import numpy as np
 
 from src.datatypes import StftStore
 
 
-def load_precomputed_stfts(patient_stfts_dir: str) -> dict[str, list[StftStore]]:
+def load_precomputed_stfts(patient_stfts_dir: str) -> list[StftStore]:
     """
-    Load the precomputed STFT (.npz) for a single patient.
+    Load precomputed STFT (.h5) files for a single patient when STFTs are stored per epoch.
 
     Args:
-        patient_stfts_dir (str): Path of the patient sfts.
+        patient_stfts_dir (str): Path containing all precomputed STFT .h5 files.
 
     Returns:
-        dict[str, list[StftStore]]: A dictionary containing each channel with each epochs
-            - {ch_name: [stft_store_list]}
+        list[StftStore]: List of STFTs for all epochs.
     """
 
-    stfts_by_channel: dict[str, list[StftStore]] = {}
+    # List all .h5 files sorted
+    epoch_files = sorted(
+        f for f in os.listdir(patient_stfts_dir) if f.lower().endswith(".h5")
+    )
 
-    for ch_name in os.listdir(patient_stfts_dir):
-        ch_path = os.path.join(patient_stfts_dir, ch_name)
-        if not os.path.isdir(ch_path):
-            continue  # skip files if any
+    stft_store_list: list[StftStore] = []
 
-        # List .npz files in channel folder
-        epoch_files = sorted(
-            f for f in os.listdir(ch_path) if f.lower().endswith(".npz")
-        )
+    for epoch_file in epoch_files:
+        full_path = os.path.join(patient_stfts_dir, epoch_file)
 
-        stft_store_list: list[StftStore] = []
-        for epoch_file in epoch_files:
-            full_path = os.path.join(ch_path, epoch_file)
-            data = np.load(full_path)
+        with h5py.File(full_path, "r") as f:
             stft_store_list.append(
                 StftStore(
-                    phase=data["phase"],
-                    start=data["start"],
-                    end=data["end"],
-                    stft_db=data["stft_db"],
-                    power=data["power"],
-                    Zxx=data["Zxx"],
-                    freqs=data["freqs"],
-                    times=data["times"],
+                    phase=f.attrs["phase"],
+                    start=f.attrs["start"],
+                    end=f.attrs["end"],
+                    stft_db=f["stft_db"][:],
+                    power=f["power"][:]
+                    if "power" in f
+                    else np.empty((0,), dtype=np.float32),
+                    Zxx=f["Zxx"][:],
+                    mag=f["mag"][:],
+                    freqs=f["freqs"][:],
+                    times=f["times"][:],
+                    seizure_id=int(f.attrs.get("seizure_id", -1)),
+                    file_name=str(f.attrs["file_name"]),
                 )
             )
 
-        if stft_store_list:
-            stfts_by_channel[ch_name] = stft_store_list
-
-    return stfts_by_channel
+    return stft_store_list
