@@ -1,26 +1,25 @@
+import math
 import os
 from datetime import datetime
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torch.optim.lr_scheduler as lr_scheduler
 from sklearn.metrics import accuracy_score, confusion_matrix, f1_score, recall_score
-from torch.amp import GradScaler, autocast
 from torch.utils.data import TensorDataset
-from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from src.config import DataConfig, Trainconfig
+from src.config import DataConfig, DataLoaderConfig, Trainconfig
 from src.logger import setup_logger
 from src.model.classification.concat_model import ConcatModel
 from src.model.classification.multi_seizure_model import MultimodalSeizureModel
-from src.model.data import create_data_loader, get_loocv_fold, get_paired_dataset
+from src.model.data import PairedEEGDataset, get_data_loaders, get_loocv_fold
 from src.model.early_stopping import EarlyStopping
 from src.model.metrics_utils import (
     PatientTrainAccuracy,
     PatientTrainLoss,
     TrainingResults,
+    compute_train_accuracy,
     export_training_results,
     plot_confusion_matrix,
     plot_training_accuracy,
@@ -33,18 +32,15 @@ logger = setup_logger(name="train")
 device = get_torch_device()
 
 
-def get_model(sample_size: int):
+def get_model():
     if Trainconfig.gated:
-        model = MultimodalSeizureModel(use_cbam=Trainconfig.use_cbam)
+        model = MultimodalSeizureModel(
+            use_cbam=Trainconfig.use_cbam,
+        )
     else:
         model = ConcatModel(use_cbam=Trainconfig.use_cbam)
 
-    if torch.cuda.device_count() > 1 and sample_size > 1000:
-        logger.info(f"Using {torch.cuda.device_count()} GPUs")
-        model = nn.DataParallel(model)
-
-    model = model.to(device)
-    return model
+    return model.to(device)
 
 
 def main():
@@ -58,196 +54,183 @@ def main():
         patient_id = f"{patient:02d}"
         timestamp = datetime.now().strftime("%b%d_%H-%M-%S")
 
-        log_dir = os.path.join(
-            os.path.dirname(__file__), "runs", f"patient_{patient_id}", timestamp
-        )
-        os.makedirs(log_dir, exist_ok=True)
-        writer = SummaryWriter(log_dir=log_dir)
-
         saved_models_path = os.path.join(
-            os.path.dirname(__file__),
-            "saved_models",
-            f"patient_{patient_id}.pt",
+            os.path.dirname(__file__), "saved_models", f"patient_{patient_id}.pt"
         )
-
         os.makedirs(os.path.dirname(saved_models_path), exist_ok=True)
 
-        # Get get paired dataset
-        tf_features, bis_features, labels = get_paired_dataset(patient_id=patient_id)
-        tf_tensor = torch.tensor(tf_features, dtype=torch.float32).permute(0, 3, 1, 2)
-        bis_tensor = torch.tensor(bis_features, dtype=torch.float32).permute(0, 3, 1, 2)
-        labels_tensor = torch.tensor(labels, dtype=torch.long)
-
-        logger.info(
-            f"Normalized features: {{tf: {tf_features.dtype}, {tf_features.min():.4f}-{tf_features.max():.4f}; "
-            f"bis: {bis_features.dtype}, {bis_features.min():.4f}-{bis_features.max():.4f}}}"
+        # Load paired dataset
+        dataset = PairedEEGDataset(
+            patient_id, root_dir=DataConfig.precomputed_data_path
         )
 
+        unique_seizure_ids = torch.unique(dataset.seizure_ids)
+
+        # Number of folds will be Total features / N seizures
+        # So if our total features for lets say preictal is 200 and N is 5 then
+        # 200 / 5 = 40 folds.
+        #
+        # NOTE: n_chnks and n_folds are different
+        # n_folds = The number folds for the loocv
+        # n_splits = The number of samples/chunks per fold. The number of seizures
+        # will dictate this.
+
+        n_chunks = len(unique_seizure_ids)
+
+        preictal_count = int((dataset.labels == 1).sum())
+        interictal_count = int((dataset.labels == 0).sum())
+
+        preictal_folds = math.ceil(preictal_count / n_chunks)
+        interictal_folds = math.ceil(interictal_count / n_chunks)
+
+        n_folds = min(preictal_folds, interictal_folds)
+
+        # Patient-level accumulators
         all_preds, all_labels = [], []
 
-        # Tracker for the best val loss for each patient
-        patient_best_val_loss = float("inf")
+        patient_train_losses, patient_val_losses = [], []
+        patient_train_accuracies, patient_val_accuracies = [], []
 
-        for sample_idx in tqdm(range(len(tf_features)), desc="Samples"):
-            train_losses = []
-            val_losses = []
-
+        for fold_idx in tqdm(range(n_folds), desc="Seizure folds"):
+            train_losses, val_losses = [], []
             train_accuracies, val_accuracies = [], []
 
-            # Split train/test data through loocv
+            # LOSO Fold features
             (tf_train, bis_train, labels_train), (tf_test, bis_test, labels_test) = (
-                get_loocv_fold(
-                    tf_tensor,
-                    bis_tensor,
-                    labels_tensor,
-                    sample_idx=sample_idx,
-                    undersample=Trainconfig.undersample
-                    and not Trainconfig.class_weighting,
-                )
+                get_loocv_fold(dataset, n_chunks, n_folds, fold_idx)
             )
 
-            train_loader = create_data_loader(
-                tensor_dataset=TensorDataset(tf_train, bis_train, labels_train)
+            train_set = TensorDataset(tf_train, bis_train, labels_train)
+            test_set = TensorDataset(tf_test, bis_test, labels_test)
+
+            # Data loaders
+            train_loader, test_loader = get_data_loaders(
+                train_set,
+                test_set,
+                batch_size=DataLoaderConfig.batch_size,
+                pin_memory=False,
             )
-            batch_tf, batch_bis, batch_labels = next(iter(train_loader))
+
+            unique_train, counts_train = torch.unique(labels_train, return_counts=True)
+            unique_test, counts_test = torch.unique(labels_test, return_counts=True)
             logger.info(
-                f"Train batch types: tf={batch_tf.dtype}, bis={batch_bis.dtype}, labels={batch_labels.dtype}"
-            )
-            logger.info(
-                f"Train batch shapes: tf={batch_tf.shape}, bis={batch_bis.shape}, labels={batch_labels.shape}"
-            )
-
-            test_loader = create_data_loader(
-                tensor_dataset=TensorDataset(tf_test, bis_test, labels_test)
+                f"[Patient {patient_id} | Fold {fold_idx}] "
+                f"Train class dist: {dict(zip(unique_train.tolist(), counts_train.tolist()))} | "
+                f"Test class dist: {dict(zip(unique_test.tolist(), counts_test.tolist()))}"
             )
 
-            # Initialize model, criterion, optimizer, scaler
-            model = get_model(len(tf_features))
+            # Initialize model
+            model = get_model()
+            criterion = nn.CrossEntropyLoss()
+            optimizer = optim.Adam(model.parameters(), lr=Trainconfig.lr)
+            early_stopping = EarlyStopping(patience=5, delta=1e-4)
 
-            if Trainconfig.class_weighting:
-                unique_labels, counts = torch.unique(labels_train, return_counts=True)
-                class_frequencies = counts / len(labels_train)
-                class_weights = 1.0 / class_frequencies
-                class_weights = (1.0 / class_frequencies).float().to(device)
-
-                logger.info(f"Using class weights: {class_weights}")
-
-                criterion = nn.CrossEntropyLoss(weight=class_weights)
-            else:
-                criterion = nn.CrossEntropyLoss()
-
-            if Trainconfig.use_lr_scheduler:
-                logger.info("Using learning rate scheduler")
-                optimizer = optim.Adam(
-                    model.parameters(), lr=Trainconfig.lr, weight_decay=1e-4
-                )
-                scheduler = lr_scheduler.ReduceLROnPlateau(
-                    optimizer,
-                    mode="min",
-                    factor=0.5,
-                    patience=2,
-                    cooldown=1,
-                    min_lr=1e-6,
-                )
-            else:
-                optimizer = optim.Adam(model.parameters(), lr=Trainconfig.lr)
-
-            scaler = GradScaler(device.type)
-            early_stopping = EarlyStopping()
-
-            # Training
             for epoch in range(Trainconfig.num_epochs):
                 model.train()
-                epoch_loss = 0.0
-                train_correct, train_total = 0, 0
+                train_loss_sum = 0.0
+                train_acc_sum = 0.0
 
                 for batch_tf, batch_bis, batch_labels in tqdm(
-                    train_loader, desc="Train Batches", leave=False
+                    train_loader,
+                    desc=f"Train Batches (Patient {patient_id}, Fold {fold_idx + 1})",
+                    leave=False,
                 ):
-                    batch_tf = batch_tf.to(device, non_blocking=True)
-                    batch_bis = batch_bis.to(device, non_blocking=True)
-                    batch_labels = batch_labels.to(device, non_blocking=True)
-
+                    batch_tf, batch_bis, batch_labels = (
+                        batch_tf.to(device),
+                        batch_bis.to(device),
+                        batch_labels.to(device),
+                    )
                     optimizer.zero_grad()
 
-                    # Mixed precision
-                    with autocast(device.type):
-                        outputs = model(batch_tf, batch_bis)
-                        loss = criterion(outputs, batch_labels)
+                    outputs = model(batch_tf, batch_bis)
+                    loss = criterion(outputs, batch_labels)
 
-                    preds = torch.argmax(outputs, dim=1)
-                    train_correct += (preds == batch_labels).sum().item()
-                    train_total += batch_labels.size(0)
+                    loss.backward()
+                    optimizer.step()
 
-                    scaler.scale(loss).backward()
-                    scaler.step(optimizer)
-                    scaler.update()
+                    train_loss_sum += loss.item()
+                    train_acc_sum += compute_train_accuracy(outputs, batch_labels)
 
-                    epoch_loss += loss.item()
+                average_train_loss = train_loss_sum / len(train_loader)
+                average_train_accuracy = train_acc_sum / len(train_loader)
 
-                # Compute average training loss and accuracy
-                avg_train_loss = epoch_loss / len(train_loader)
-                avg_train_acc = train_correct / train_total
+                val_loss_sum = 0.0
+                val_correct = 0
+                val_total = 0
 
                 model.eval()
-                val_loss = 0.0
-                all_val_preds, all_val_labels = [], []
-
                 with torch.no_grad():
                     for batch_tf, batch_bis, batch_labels in test_loader:
-                        batch_tf = batch_tf.to(device, non_blocking=True)
-                        batch_bis = batch_bis.to(device, non_blocking=True)
-                        batch_labels = batch_labels.to(device, non_blocking=True)
-
+                        batch_tf, batch_bis, batch_labels = (
+                            batch_tf.to(device),
+                            batch_bis.to(device),
+                            batch_labels.to(device),
+                        )
                         outputs = model(batch_tf, batch_bis)
                         loss = criterion(outputs, batch_labels)
-                        val_loss += loss.item()
+                        preds = torch.argmax(outputs, dim=1)
 
-                        preds = torch.argmax(outputs, dim=1).cpu().numpy()
-                        all_val_preds.extend(preds)
-                        all_val_labels.extend(batch_labels.cpu().numpy())
+                        val_loss_sum += loss.item()
+                        val_correct += (preds == batch_labels).sum().item()
+                        val_total += batch_labels.size(0)
 
-                        all_preds.extend(preds)
-                        all_labels.extend(batch_labels.cpu().numpy())
+                average_validation_loss = val_loss_sum / len(test_loader)
+                average_validation_accuracy = val_correct / max(1, val_total)
 
-                avg_val_loss = val_loss / len(test_loader)
-                avg_val_acc = accuracy_score(all_val_labels, all_val_preds)
-
-                train_losses.append(avg_train_loss)
-                val_losses.append(avg_val_loss)
-                train_accuracies.append(avg_train_acc)
-                val_accuracies.append(avg_val_acc)
-
-                if Trainconfig.use_lr_scheduler:
-                    scheduler.step(avg_val_loss)
-
-                early_stopping(avg_val_loss, model)
-                if early_stopping.best_score is not None:
-                    fold_best_val = -float(early_stopping.best_score)
-                    if fold_best_val < patient_best_val_loss:
-                        patient_best_val_loss = fold_best_val
-                        torch.save(model.state_dict(), saved_models_path)
-
-                if early_stopping.early_stop:
-                    break
+                train_losses.append(average_train_loss)
+                train_accuracies.append(average_train_accuracy)
+                val_losses.append(average_validation_loss)
+                val_accuracies.append(average_validation_accuracy)
 
                 logger.info(
-                    f"[Patient {patient_id} | Fold {sample_idx + 1}] "
-                    f"Epoch {epoch + 1}/{Trainconfig.num_epochs} "
-                    f"- avg_train_loss: {avg_train_loss:.4f} | avg_val_loss: {avg_val_loss:.4f} "
-                    f"| avg_val_acc: {avg_val_acc:.4f}"
+                    f"[Patient {patient_id} | Fold {fold_idx + 1}] "
+                    f"Epoch {epoch + 1}/{Trainconfig.num_epochs} - "
+                    f"Train Loss: {average_train_loss:.4f} | "
+                    f"Train Acc: {average_train_accuracy * 100:.2f}% | "
+                    f"Val Loss: {average_validation_loss:.4f} | "
+                    f"Val Acc: {average_validation_accuracy * 100:.2f}%"
                 )
 
+                early_stopping(average_validation_loss, model)
+                if early_stopping.early_stop:
+                    logger.info(
+                        f"Early stopping triggered — best epoch: {epoch + 1 - early_stopping.counter}"
+                    )
+                    break
+
+            if early_stopping.best_model_state is not None:
+                model.load_state_dict(early_stopping.best_model_state)
+
+            # ONE final evaluation pass for fold-level preds/labels
+            model.eval()
+            fold_preds, fold_gt = [], []
+            with torch.no_grad():
+                for batch_tf, batch_bis, batch_labels in test_loader:
+                    batch_tf, batch_bis, batch_labels = (
+                        batch_tf.to(device),
+                        batch_bis.to(device),
+                        batch_labels.to(device),
+                    )
+                    outputs = model(batch_tf, batch_bis)
+                    preds = torch.argmax(outputs, dim=1)
+                    fold_preds.extend(preds.cpu().numpy())
+                    fold_gt.extend(batch_labels.cpu().numpy())
+
+            all_preds.extend(fold_preds)
+            all_labels.extend(fold_gt)
+
+            patient_train_losses = train_losses
+            patient_val_losses = val_losses
+            patient_train_accuracies = train_accuracies
+            patient_val_accuracies = val_accuracies
+
         accuracy = round(accuracy_score(all_labels, all_preds), 4)
-        recall = round(recall_score(all_labels, all_preds, average="binary"), 4)
-        f1 = round(f1_score(all_labels, all_preds, average="binary"), 4)
-
+        recall = round(recall_score(all_labels, all_preds), 4)
+        f1 = round(f1_score(all_labels, all_preds), 4)
         cf_matrix = confusion_matrix(all_labels, all_preds, labels=[0, 1])
-
-        # True Negatives, False Positives,
-        # False Negatives, True Positives
         TN, FP, FN, TP = cf_matrix.ravel()
 
+        # Export per-patient summary row
         training_result_fieldnames = [
             "patient_id",
             "setup_name",
@@ -261,7 +244,6 @@ def main():
             "f1_score",
         ]
 
-        # Show training results in table format in the console
         training_results = TrainingResults(
             patient_id,
             Trainconfig.setup_name,
@@ -275,26 +257,45 @@ def main():
             f1,
         )
 
-        # Plot and save the training loss
+        # Visualizations
         plot_training_loss(
             PatientTrainLoss(
-                patient_id, train_losses, val_losses, all_preds, all_labels, timestamp
+                patient_id,
+                patient_train_losses,
+                patient_val_losses,
+                all_preds,
+                all_labels,
+                timestamp,
             )
         )
         plot_training_accuracy(
             PatientTrainAccuracy(
-                patient_id, train_accuracies, val_accuracies, timestamp
+                patient_id,
+                patient_train_accuracies,
+                patient_val_accuracies,
+                timestamp,
             )
         )
-
-        # Plot and save confusion matrix
         plot_confusion_matrix(patient_id, cf_matrix, timestamp)
 
-        # Export training results into csv
         training_results_list.append(training_results)
         export_training_results(training_result_fieldnames, [training_results])
 
-    show_training_results(training_result_fieldnames, training_results_list)
+    show_training_results(
+        [
+            "patient_id",
+            "setup_name",
+            "run_timestamp",
+            "true_positives",
+            "false_positives",
+            "true_negatives",
+            "false_negatives",
+            "accuracy",
+            "recall",
+            "f1_score",
+        ],
+        training_results_list,
+    )
 
 
 if __name__ == "__main__":

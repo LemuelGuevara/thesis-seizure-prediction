@@ -1,52 +1,113 @@
+import os
+
 import matplotlib.pyplot as plt
 import numpy as np
 
 
-def view_single_mosaic(npz_path: str, save_png: bool = False) -> None:
-    """
-    View a single mosaic from npz file.
-
-    Args:
-        npz_path: Path to the npz file
-        save_png: Whether to save as PNG file
-    """
-    # Load the npz file
+def load_npz_data(npz_path: str):
+    """Load tensor and metadata from npz file."""
     data = np.load(npz_path)
-    tensor = data["tensor"]
-    start = data["start"]
-    end = data["end"]
-    phase = data["phase"]
+    tensor = np.squeeze(data["tensor"])
+    start = float(data["start"][()])  # Extract 0-d array
+    end = float(data["end"][()])  # Extract 0-d array
+    phase = str(data["phase"][()])  # Extract 0-d array
+    freqs = data["freqs"]  # This is a 1-d array
+    n_channels = data["n_channels"]
+    return tensor, start, end, phase, freqs, n_channels
 
-    print(f"Mosaic shape: {tensor.shape}")
-    print(f"Start: {start}, End: {end}, Phase: {phase}")
-    print(f"Value range: [{tensor.min():.3f}, {tensor.max():.3f}]")
 
-    # Remove batch dimension if present
-    if len(tensor.shape) == 4:
-        tensor = tensor[0]
+def plot_spectrogram(ax, tensor, start, end, phase, freqs, n_channels):
+    """Plot RGB spectrogram (freq × time × 3)."""
+    print(tensor.shape)
+    duration_sec = end - start
 
-    plt.figure(figsize=(10, 10))
-    plt.imshow(tensor[:, :, 0], cmap="viridis")
-    plt.title(f"Epoch {start}-{end} (Phase: {phase})")
-    cbar = plt.colorbar()
-    cbar.set_label("Power (dB)", rotation=270, labelpad=20)
-    plt.axis("off")
+    img = ax.imshow(
+        tensor[..., 0],
+        cmap="viridis",
+        origin="lower",
+        aspect="auto",
+        extent=[0, duration_sec, freqs[0], freqs[-1]],
+    )
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("Frequency (Hz)")
+    ax.set_title(f"Spectrogram: {phase} ({start:.1f}-{end:.1f}s)")
+    plt.colorbar(img, ax=ax, label="Power (dB)")
 
-    if save_png:
-        png_path = npz_path.replace(".npz", ".png")
-        plt.savefig(png_path, dpi=150, bbox_inches="tight")
-        print(f"Saved PNG: {png_path}")
 
+def plot_bispectrum(ax, tensor, phase, start, end, freqs):
+    """Plot RGB bispectrum (freq × freq × 3)."""
+    print(tensor.shape)
+    duration_sec = end - start
+    freq_max = freqs[-1]
+    img = ax.imshow(
+        tensor[..., 0],
+        cmap="viridis",
+        origin="lower",
+        aspect="equal",
+        extent=[0, freq_max, 0, freq_max],
+    )
+    ax.set_xlabel("f₁ (Hz)")
+    ax.set_ylabel("f₂ (Hz)")
+    ax.set_title(f"Bispectrum: {phase} ({start:.1f}-{end:.1f}s)")
+    plt.colorbar(img, ax=ax, label="Power (dB)")
+
+
+def view_timefreq_and_bispectrum(tf_npz: str | None = None, bis_npz: str | None = None):
+    """
+    View time-frequency spectrogram and bispectrum side by side (if both provided).
+    """
+    if not tf_npz and not bis_npz:
+        raise ValueError("At least one of tf_npz or bis_npz must be provided.")
+
+    n_plots = sum([tf_npz is not None, bis_npz is not None])
+    fig, axes = plt.subplots(1, n_plots, figsize=(8 * n_plots, 6))
+    if n_plots == 1:
+        axes = [axes]
+
+    idx = 0
+    if tf_npz:
+        tf_tensor, start, end, phase, freqs, n_channels = load_npz_data(tf_npz)
+
+        # ➜ add this block:
+        if tf_tensor.ndim == 3 and tf_tensor.shape[0] in (1, 3):
+            tf_tensor = np.moveaxis(tf_tensor, 0, -1)  # (C,H,W) -> (H,W,C)
+
+        if tf_tensor.ndim != 3 or tf_tensor.shape[2] != 3:
+            raise ValueError(
+                f"Expected RGB spectrogram (H, W, 3), got {tf_tensor.shape}"
+            )
+        plot_spectrogram(axes[idx], tf_tensor, start, end, phase, freqs, n_channels)
+        idx += 1
+
+    if bis_npz:
+        bis_tensor, start, end, phase, freqs, n_channels = load_npz_data(bis_npz)
+
+        # ➜ add this block:
+        if bis_tensor.ndim == 3 and bis_tensor.shape[0] in (1, 3):
+            bis_tensor = np.moveaxis(bis_tensor, 0, -1)  # (C,H,W) -> (H,W,C)
+
+        if bis_tensor.ndim != 3 or bis_tensor.shape[2] != 3:
+            raise ValueError(
+                f"Expected RGB bispectrum (H, W, 3), got {bis_tensor.shape}"
+            )
+        plot_bispectrum(axes[idx], bis_tensor, phase, start, end, freqs)
+
+    fig.tight_layout()
     plt.show()
 
 
 if __name__ == "__main__":
-    time_frequency = (
-        "precomputed_data/patient_01/time-frequency/preictal_tf_band_2951_2981.npz"
-    )
-    bispctrum = (
-        "precomputed_data/patient_01/bispectrum/preictal_bispectrum_2966_2996.npz"
-    )
+    patient = 2
+    patient_id = f"{patient:02d}"
+    tf_file = f"precomputed_data/patient_{patient_id}/time-frequency/preictal_chb02_16+_001172_001202_tf.npz"
+    bis_file = f"precomputed_data/patient_{patient_id}/bispectrum/preictal_chb02_16+_001172_001202_bis.npz"
 
-    # Change accordingly
-    view_single_mosaic(time_frequency)
+    # view both if available
+    if os.path.exists(tf_file) and os.path.exists(bis_file):
+        view_timefreq_and_bispectrum(tf_npz=tf_file, bis_npz=bis_file)
+    elif os.path.exists(tf_file):
+        view_timefreq_and_bispectrum(tf_npz=tf_file)
+    elif os.path.exists(bis_file):
+        view_timefreq_and_bispectrum(bis_npz=bis_file)
+    else:
+        print("No valid files found.")

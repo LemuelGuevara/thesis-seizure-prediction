@@ -31,7 +31,7 @@ def setup_logger(name: str) -> logging.Logger:
     stream_handler.setLevel(log_level)
 
     formatter = logging.Formatter(
-        fmt="%(asctime)s | %(name)s | %(funcName)s | [%(levelname)s] %(message)s",
+        fmt="%(asctime)s | %(funcName)s | [%(levelname)s] %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
     stream_handler.setFormatter(formatter)
