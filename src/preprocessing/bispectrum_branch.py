@@ -106,9 +106,6 @@ def compute_bispectrum_estimation(
         coeffs, centers = Zxx, freqs
 
     n_bins = coeffs.shape[0]
-    logger.info(
-        f"Computing {'band-level' if PreprocessingConfig.band_level_bispectrum else 'full'} bispectrum for {n_bins} bins."
-    )
 
     B_complex = np.zeros((n_bins, n_bins), dtype=np.complex128)
     if freqs.size == 0 or Zxx.size == 0:
@@ -125,7 +122,6 @@ def compute_bispectrum_estimation(
         np.abs(freqs[left] - targets) <= np.abs(freqs[right] - targets), left, right
     )
     sum_idx = np.where(targets <= freqs[-1], nearest, -1).astype(int)
-    logger.debug("Computed nearest frequency indices for all band pairs.")
 
     conj_Zxx = np.conjugate(Zxx)
 
@@ -137,11 +133,6 @@ def compute_bispectrum_estimation(
             logger.debug(f"B[{i},{j}] skipped (target frequency out of range).")
             return 0j
         value = np.mean(Xi * coeffs[j] * conj_Zxx[idx])
-        logger.debug(
-            f"B[{i},{j}] computed using freq idx {idx} "
-            f"(center={centers[i] + centers[j]:.2f} Hz, "
-            f"{'band-level' if PreprocessingConfig.band_level_bispectrum else 'full'})."
-        )
         return complex(value)
 
     bispec_tasks: list[tuple[int, int, np.ndarray]] = [
