@@ -262,7 +262,7 @@ def balance_epochs(epochs: list[IntervalMeta]):
 
 # 3. Preprocessing: Segmentation into epochs
 def segment_recordings(
-    recordings: list[IntervalMeta],
+    intervals: list[IntervalMeta],
     undersampling: bool,
     overlap: float = 0.5,  # 50% overlap
 ) -> list[IntervalMeta]:
@@ -286,13 +286,15 @@ def segment_recordings(
 
     # Match number of interictals with the number preictals recordings
     preictal_intervals = [
-        recording for recording in recordings if recording.phase == "preictal"
+        interval for interval in intervals if interval.phase == "preictal"
     ]
     interictal_intervals = [
-        recording for recording in recordings if recording.phase == "interictal"
+        interval for interval in intervals if interval.phase == "interictal"
     ]
 
-    sampled_interictals = random.sample(interictal_intervals, len(preictal_intervals))
+    sampled_interictals = random.sample(
+        interictal_intervals, min(len(interictal_intervals), len(preictal_intervals))
+    )
 
     # Reinintialize precital and interictal seizure ids to start at 0 again
     for new_id, preictal in enumerate(preictal_intervals):
