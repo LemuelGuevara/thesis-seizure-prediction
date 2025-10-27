@@ -5,20 +5,14 @@ This module is the main module for piecing togother all the functions that are n
 STFTS from the EEG recordings.
 """
 
-import gc
 import os
-import random
-from typing import cast
 
-import numpy as np
-from mne.io.base import BaseRaw, concatenate_raws
-from natsort import natsorted
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
 from src.config import DataConfig
 from src.logger import get_all_active_loggers, setup_logger
-from src.preprocessing.data_transformation import precompute_stfts
+from src.preprocessing.data_transformation import precompute_stft
 from src.utils import (
     export_to_csv,
     is_precomputed_data_exists,
@@ -28,9 +22,9 @@ from src.utils import (
 
 from .data_cleaning import (
     apply_filters,
-    extract_seizure_intervals,
     load_raw_recordings,
-    segment_intervals,
+    parse_patient_summary_intervals,
+    segment_recordings,
 )
 
 logger = setup_logger(name="run_precompute_stfts")
@@ -49,11 +43,16 @@ def main():
 
             """
                 Data Preparation
-                - Extraction of seizure intervals
+                - Extraction of seizure recordings
                 - Normalizing time format 
                 - Loading patient recordings
                 - Concatenating all recordings of each patient into 1 continuous recording
             """
+
+            patient_stfts_dir = os.path.join(
+                DataConfig.precomputed_data_path, f"patient_{patient_id}", "stfts"
+            )
+            os.makedirs(patient_stfts_dir, exist_ok=True)
 
             # 1. Extraction of seizure intervals and normalization of time format
             with load_patient_summary(
@@ -65,91 +64,35 @@ def main():
                     ictal_intervals,
                     seizure_files_data,
                     no_seizure_files_data,
-                ) = extract_seizure_intervals(patient_summary)
+                ) = parse_patient_summary_intervals(patient_summary)
                 logger.info(f"Number of seizures: {len(ictal_intervals)}")
 
-            # Initial values
-            seizure_filenames = [file.file_name for file in seizure_files_data]
-            no_seizure_filenames = [file.file_name for file in no_seizure_files_data]
+            combined_intervals = preictal_intervals + interictal_intervals
+            total_phase_counts = {"preictal": 0, "interictal": 0}
 
-            cropped_no_seizure_files = no_seizure_files_data
-            cropped_no_seizure_filenames = {
-                file.file_name for file in cropped_no_seizure_files
-            }
-            filtered_interictal_intervals = interictal_intervals
-            combined_file_data = seizure_files_data + no_seizure_files_data
-
-            if combined_file_data:
-                durations = [interval.duration for interval in combined_file_data]
-                average_recording_duration = round(np.mean(durations))  # in hours
-
-            logger.info(f"Average recording duration (s): {average_recording_duration}")
-
-            if DataConfig.non_seizure_file_reduction:
-                # We only do non-seizure file reduction when the average recording time
-                # of the patient is above 3600s (or 2hr)
-                if average_recording_duration > 7200:
-                    # Filter interictal intervals to only include the files we want to keep
-                    num_to_keep = len(ictal_intervals)
-                    cropped_no_seizure_files = random.sample(
-                        no_seizure_files_data,
-                        min(num_to_keep, len(no_seizure_files_data)),
-                    )
-                    cropped_no_seizure_filenames = {
-                        file.file_name for file in cropped_no_seizure_files
-                    }
-                    # Only keep interictal intervals from the cropped file list
-                    filtered_interictal_intervals = [
-                        interval
-                        for interval in interictal_intervals
-                        if interval.file_name in cropped_no_seizure_filenames
-                    ]
-
-                    no_seizure_filenames = [
-                        file.file_name for file in cropped_no_seizure_files
-                    ]
-
-                logger.info(
-                    f"Keeping {len(cropped_no_seizure_files)} of {len(no_seizure_files_data)} non-seizure files "
-                    f"with {len(filtered_interictal_intervals)} interictal intervals"
-                )
-                logger.info(
-                    f"Selected non-seizure files for interictal intervals: {cropped_no_seizure_filenames}"
-                )
-
-            combined_intervals = preictal_intervals + filtered_interictal_intervals
-
-            file_names = seizure_filenames + no_seizure_filenames
-            # We need to sort the filenames beacuse when then non-seizure file reduction
-            # clause in the run_precompute_stfts_pipeline has been activated, picking of non
-            # nonn-seiuze files is random therefore not maintaning the order of it in the list.
-            # And so once the filenames list has been passed into this function, the load order
-            # is no longer chronological. Which then once concatenated, the recording not in
-            # its natural order anymore. Natsorted is fuction from a module called natsort, it allows
-            # us to naturally sort objects e.g. chb01_01, cbh01_02, and so on.
-
-            sorted_file_names = natsorted(file_names)
-
-            patient_stfts_dir = os.path.join(
-                DataConfig.precomputed_data_path, f"patient_{patient_id}", "stfts"
+            # 2. 30-second epoch segmentation
+            segmented_recording_epochs = segment_recordings(
+                combined_intervals, undersampling=True
             )
-            os.makedirs(patient_stfts_dir, exist_ok=True)
+
+            logger.info(
+                f"Total epochs to process for patient: {len(segmented_recording_epochs)}"
+            )
 
             if is_precomputed_data_exists(data_path=patient_stfts_dir):
                 logger.info(
                     f"Precomputed STFTs found for patient {patient_id} — skipping reading/precompute."
                 )
-                # Still count the intervals even though we skip processing
-                segmented_intervals = segment_intervals(combined_intervals)
-                phase_counts: dict[str, int] = {}
-                for epoch in segmented_intervals:
-                    phase_counts[epoch.phase] = phase_counts.get(epoch.phase, 0) + 1
             else:
                 # 2. Loading patient recordings and concatenating all recordings into 1 continuous recording
-                raw_recordings = load_raw_recordings(patient_id, sorted_file_names)
-                raw_concatenated = cast(
-                    BaseRaw, concatenate_raws(raw_recordings, preload=False)
+                valid_files = sorted(
+                    {
+                        os.path.basename(str(iv.file_name))
+                        for iv in segmented_recording_epochs
+                    }
                 )
+
+                raw_recordings = load_raw_recordings(patient_id, valid_files)
 
                 """
                     Data Preprocessing
@@ -158,39 +101,54 @@ def main():
                     - Computation of STFT
                 """
 
-                logger.info("Loading data into memory")
-                loaded_raw = raw_concatenated.load_data()
-                logger.info(
-                    f"Memory size: {loaded_raw.get_data().nbytes / (1024**2):.2f} MB"
-                )
+                for raw in raw_recordings:
+                    # NOTE: we should only process recordings that are from the intervals extracted
+                    # meaning if the the intervals only have 3 files/filenames, we should in use load
+                    # those recordings.
+                    raw_recording_filename = os.path.basename(str(raw.filenames[0]))
 
-                # 1. Filtering
-                filtered_recording = apply_filters(loaded_raw)
+                    logger.info(f"Processing file: {raw.filenames[0]}")
+                    logger.info("Loading data into memory")
+                    loaded_raw = raw.load_data()
+                    logger.info(
+                        f"Memory size: {loaded_raw.get_data().nbytes / (1024**2):.2f} MB"
+                    )
 
-                # 2. 30-second epoch segmentation
-                segmented_intervals = segment_intervals(combined_intervals)
+                    # 1. Filtering
+                    filtered_recording = apply_filters(loaded_raw)
+                    epochs_this_file = [
+                        iv
+                        for iv in segmented_recording_epochs
+                        if os.path.basename(str(iv.file_name)) == raw_recording_filename
+                    ]
+                    if not epochs_this_file:
+                        logger.info(
+                            f"No intervals for {raw_recording_filename}; skipping."
+                        )
+                        continue
 
-                # Removed the loadded raw recording after filtering to save ram.
-                # The filtered recording will then be loaded again in the precompute stfts epoch
-                del loaded_raw
-                gc.collect()
+                    # 3. Computation of STFT
+                    # NOTE: STFTS will be precomputed and saved on the disk
+                    # Void function for precomputing the stfts, this will also instantly save these stfts
+                    # on the disk
+                    current_phase_counts = precompute_stft(
+                        recording=filtered_recording,
+                        patient_stfts_dir=patient_stfts_dir,
+                        segmented_epochs=epochs_this_file,
+                    )
 
-                # 3. Computation of STFT
-                # NOTE: STFTS will be precomputed and saved on the disk
-
-                # Void function for precomputing the stfts, this will also instantly save these stfts
-                # on the disk
-                phase_counts = precompute_stfts(
-                    recording=filtered_recording,
-                    patient_stfts_dir=patient_stfts_dir,
-                    segmented_intervals=segmented_intervals,
-                )
+                    total_phase_counts["preictal"] += current_phase_counts.get(
+                        "preictal", 0
+                    )
+                    total_phase_counts["interictal"] += current_phase_counts.get(
+                        "interictal", 0
+                    )
 
                 patient_stfts_summary = {
                     "patient_id": patient_id,
                     "number_of_seizures": len(ictal_intervals),
-                    "preictal_intervals": phase_counts.get("preictal", 0),
-                    "interictal_intervals": phase_counts.get("interictal", 0),
+                    "preictal_epochs": total_phase_counts.get("preictal", 0),
+                    "interictal_epochs": total_phase_counts.get("interictal", 0),
                 }
 
                 # Write to csv the summarized patient precomputed stfts
@@ -202,8 +160,8 @@ def main():
                 fieldnames = [
                     "patient_id",
                     "number_of_seizures",
-                    "preictal_intervals",
-                    "interictal_intervals",
+                    "preictal_epochs",
+                    "interictal_epochs",
                 ]
                 export_to_csv(
                     path=precomputed_stfts_summary_path,
