@@ -9,33 +9,28 @@ import numpy as np
 
 
 @dataclass
-class EpochInterval:
+class IntervalMeta:
     phase: Literal["preictal", "interictal", "ictal"]
     start: int
     end: int
     duration: Optional[int] = None
     windows_created: Optional[int] = None
     file_name: Optional[str] = None
-
-
-@dataclass
-class CombinedIntervals:
-    preictal_intervals: list[EpochInterval]
-    interictal_intervals: list[EpochInterval]
-    ictal_intervals: list[EpochInterval]
+    seizure_id: Optional[int] = None
 
 
 @dataclass(kw_only=True)
-class StftStore(EpochInterval):
+class StftStore(IntervalMeta):
     stft_db: np.ndarray
     power: np.ndarray
     Zxx: np.ndarray
     freqs: np.ndarray
     times: np.ndarray
+    mag: np.ndarray
 
 
 @dataclass(kw_only=True)
-class BandTimeStore(EpochInterval):
+class BandTimeStore(IntervalMeta):
     band_time: np.ndarray  # shape: (n_bands, n_times)
     times: np.ndarray
 
@@ -49,7 +44,7 @@ class PrecomputedStftSummary:
 
 
 @dataclass
-class IntervalFileInfo:
+class RecordingFileInfo:
     file_name: str
-    interval: EpochInterval
+    recording: IntervalMeta
     duration: int
