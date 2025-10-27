@@ -4,7 +4,9 @@ from dataclasses import asdict, dataclass
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
+import torch
 from prettytable import PrettyTable
+from torch import Tensor
 
 from src.config import DataConfig, Trainconfig
 from src.logger import setup_logger
@@ -198,3 +200,20 @@ def export_training_results(
         mode="a",
     )
     logger.info(f"Saved training results CSV to {training_results_path}")
+
+
+def compute_train_accuracy(outputs: Tensor, labels: Tensor) -> float:
+    """
+    Compute the number of correct predictions and total samples in a batch.
+
+    Args:
+        outputs (torch.Tensor): Model output logits of shape [B, num_classes].
+        labels (torch.Tensor): Ground-truth labels of shape [B].
+
+    Returns:
+        (correct, total): Tuple with number of correct predictions and total count.
+    """
+    preds = torch.argmax(outputs, dim=1)
+    correct = (preds == labels).sum().item()
+    total = labels.size(0)
+    return correct / total if total > 0 else 0.0
