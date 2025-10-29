@@ -137,18 +137,33 @@ def get_loocv_fold(
     preictal_idx = torch.where(preictal_mask)[0]
     interictal_idx = torch.where(interictal_mask)[0]
 
-    if len(interictal_idx) > len(preictal_idx):
+    preictal_count = len(preictal_idx)
+    interictal_count = len(interictal_idx)
+
+    if interictal_count > preictal_count:
         logger.info(
             "Undersampling interictals as balancing epochs did not work in preprocessing "
         )
-        logger.info(f"Before undersampling interictals: {len(interictal_idx)}")
+        logger.info(f"Before undersampling interictals: {interictal_count}")
 
-        perm = torch.randperm(len(interictal_idx))[: len(preictal_idx)]
+        perm = torch.randperm(interictal_count)[:preictal_count]
         interictal_idx = interictal_idx[perm]
 
-        sampled_interictals = len(interictal_idx)
+        logger.info(f"After undersampling interictals: {len(interictal_idx)}")
 
-        logger.info(f"After undersampling interictals: {sampled_interictals}")
+    elif preictal_count > interictal_count:
+        logger.info(
+            "Undersampling preictals as balancing epochs did not work in preprocessing "
+        )
+        logger.info(f"Before undersampling preictals: {preictal_count}")
+
+        perm = torch.randperm(preictal_count)[:interictal_count]
+        preictal_idx = preictal_idx[perm]
+
+        logger.info(f"After undersampling preictals: {len(preictal_idx)}")
+
+    else:
+        logger.info("Classes already balanced")
 
     logger.info(
         f"Preictal indices count: {len(preictal_idx)}, interictal indices count: {len(interictal_idx)}"
