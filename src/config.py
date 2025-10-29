@@ -112,4 +112,5 @@ class Trainconfig:
     undersample: ClassVar[bool] = train_toml["undersample"]
     gated: ClassVar[bool] = train_toml["gated"]
     class_weighting: ClassVar[bool] = train_toml["class_weighting"]
+    modalities: ClassVar[list] = train_toml["modalities"]
     setup_name: ClassVar[str] = snake_case(train_toml["setup_name"])

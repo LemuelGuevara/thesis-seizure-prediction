@@ -13,7 +13,13 @@ from src.config import DataConfig, DataLoaderConfig, Trainconfig
 from src.logger import setup_logger
 from src.model.classification.concat_model import ConcatModel
 from src.model.classification.multi_seizure_model import MultimodalSeizureModel
-from src.model.data import PairedEEGDataset, get_data_loaders, get_loocv_fold
+from src.model.classification.uni_seizure_model import UnimodalSeizureModel
+from src.model.data import (
+    PairedEEGDataset,
+    get_data_loaders,
+    get_loocv_fold,
+    get_model_outputs,
+)
 from src.model.early_stopping import EarlyStopping
 from src.model.metrics_utils import (
     PatientTrainAccuracy,
@@ -33,12 +39,25 @@ device = get_torch_device()
 
 
 def get_model():
-    if Trainconfig.gated:
-        model = MultimodalSeizureModel(
-            use_cbam=Trainconfig.use_cbam,
-        )
+    modalities = Trainconfig.modalities
+
+    if len(modalities) == 1:
+        logger.info(f"Using unimodal model with modality: {modalities[0]}")
+        model = UnimodalSeizureModel(use_cbam=Trainconfig.use_cbam)
+
+    elif len(modalities) == 2:
+        if Trainconfig.gated:
+            logger.info("Using gated multimodal seizure model")
+            model = MultimodalSeizureModel(use_cbam=Trainconfig.use_cbam)
+        else:
+            logger.info("Using concat multimodal seizure model")
+            model = ConcatModel(use_cbam=Trainconfig.use_cbam)
+
     else:
-        model = ConcatModel(use_cbam=Trainconfig.use_cbam)
+        raise ValueError(
+            f"Unsupported number of modalities: {len(modalities)}. "
+            f"Expected 1 or 2 but got {modalities}."
+        )
 
     return model.to(device)
 
@@ -132,7 +151,7 @@ def main():
 
                 for batch_tf, batch_bis, batch_labels in tqdm(
                     train_loader,
-                    desc=f"Train Batches (Patient {patient_id}, Fold {fold_idx + 1})",
+                    desc=f"Train Batches (Patient {patient_id}, Fold {fold_idx + 1}, Modalities: {Trainconfig.modalities})",
                     leave=False,
                 ):
                     batch_tf, batch_bis, batch_labels = (
@@ -142,7 +161,7 @@ def main():
                     )
                     optimizer.zero_grad()
 
-                    outputs = model(batch_tf, batch_bis)
+                    outputs = get_model_outputs(model, batch_tf, batch_bis)
                     loss = criterion(outputs, batch_labels)
 
                     loss.backward()
@@ -166,7 +185,7 @@ def main():
                             batch_bis.to(device),
                             batch_labels.to(device),
                         )
-                        outputs = model(batch_tf, batch_bis)
+                        outputs = get_model_outputs(model, batch_tf, batch_bis)
                         loss = criterion(outputs, batch_labels)
                         preds = torch.argmax(outputs, dim=1)
 
@@ -211,7 +230,7 @@ def main():
                         batch_bis.to(device),
                         batch_labels.to(device),
                     )
-                    outputs = model(batch_tf, batch_bis)
+                    outputs = get_model_outputs(model, batch_tf, batch_bis)
                     preds = torch.argmax(outputs, dim=1)
                     fold_preds.extend(preds.cpu().numpy())
                     fold_gt.extend(batch_labels.cpu().numpy())

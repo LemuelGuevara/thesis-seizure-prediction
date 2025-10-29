@@ -5,11 +5,17 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset, TensorDataset
 
-from src.config import DataLoaderConfig
+from src.config import DataLoaderConfig, Trainconfig
 from src.logger import setup_logger
 from src.preprocessing.data_transformation import normalize_to_imagenet
 
 logger = setup_logger(name="data")
+
+
+def assert_modalities():
+    assert any(m in ["tf", "bis"] for m in Trainconfig.modalities), (
+        "modalities must include 'tf', 'bis', or both"
+    )
 
 
 def epoch_key(filename: str) -> str:
@@ -113,9 +119,6 @@ def get_loocv_fold(
     tuple[torch.Tensor, torch.Tensor, torch.Tensor],
     tuple[torch.Tensor, torch.Tensor, torch.Tensor],
 ]:
-    # TODO: go back to the old N parts split
-    # https://excalidraw.com
-
     logger.info(f"Leaving out fold {fold_idx}")
 
     tf_features = dataset.tf_features
@@ -225,3 +228,14 @@ def get_data_loaders(
     )
 
     return train_loader, test_loader
+
+
+def get_model_outputs(model, batch_tf: torch.Tensor, batch_bis: torch.Tensor):
+    modalities = Trainconfig.modalities
+
+    if "tf" in modalities and "bis" not in modalities:
+        return model(batch_tf)
+    elif "bis" in modalities and "tf" not in modalities:
+        return model(batch_bis)
+    else:
+        return model(batch_tf, batch_bis)
