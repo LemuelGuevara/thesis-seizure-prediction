@@ -292,9 +292,10 @@ def segment_recordings(
         interval for interval in intervals if interval.phase == "interictal"
     ]
 
-    sampled_interictals = random.sample(
-        interictal_intervals, min(len(interictal_intervals), len(preictal_intervals))
-    )
+    if len(preictal_intervals) < len(interictal_intervals):
+        sampled_interictals = random.sample(
+            interictal_intervals, len(preictal_intervals)
+        )
 
     # Reinintialize precital and interictal seizure ids to start at 0 again
     for new_id, preictal in enumerate(preictal_intervals):
@@ -303,7 +304,11 @@ def segment_recordings(
     for new_id, interictal in enumerate(sampled_interictals):
         interictal.seizure_id = new_id
 
-    balanced_recordings = preictal_intervals + sampled_interictals
+    balanced_recordings = preictal_intervals + (
+        sampled_interictals
+        if len(preictal_intervals) < len(interictal_intervals)
+        else interictal_intervals
+    )
 
     for idx in tqdm(range(len(balanced_recordings))):
         interval = cast(IntervalMeta, balanced_recordings[idx])
