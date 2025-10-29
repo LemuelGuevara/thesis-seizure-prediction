@@ -137,6 +137,19 @@ def get_loocv_fold(
     preictal_idx = torch.where(preictal_mask)[0]
     interictal_idx = torch.where(interictal_mask)[0]
 
+    if len(interictal_idx) > len(preictal_idx):
+        logger.info(
+            "Undersampling interictals as balancing epochs did not work in preprocessing "
+        )
+        logger.info(f"Before undersampling interictals: {len(interictal_idx)}")
+
+        perm = torch.randperm(len(interictal_idx))[: len(preictal_idx)]
+        interictal_idx = interictal_idx[perm]
+
+        sampled_interictals = len(interictal_idx)
+
+        logger.info(f"After undersampling interictals: {sampled_interictals}")
+
     logger.info(
         f"Preictal indices count: {len(preictal_idx)}, interictal indices count: {len(interictal_idx)}"
     )
