@@ -15,7 +15,7 @@ from tqdm.contrib.logging import logging_redirect_tqdm
 from src.config import DataConfig
 from src.datatypes import StftStore
 from src.logger import get_all_active_loggers, setup_logger
-from src.preprocessing.bispectrum_branch import compute_bispectrum_estimation
+from src.preprocessing.bispectrum_branch import bispectrum_estimation
 from src.preprocessing.data_transformation import (
     create_efficientnet_img,
 )
@@ -68,9 +68,7 @@ def main():
                 # 2–3. Compute bispectrum per channel*
                 bispectrum_list = []
                 for ch in range(Zxx.shape[0]):
-                    _, bispectrum_db = compute_bispectrum_estimation(
-                        Zxx=Zxx[ch], freqs=freqs
-                    )
+                    bispectrum_db = bispectrum_estimation(Zxx=Zxx[ch], freqs=freqs)
                     bispectrum_list.append(bispectrum_db)
                 bispectrum_all = np.stack(bispectrum_list, axis=0)
                 bispectrum_avg = np.mean(bispectrum_all, axis=0)
