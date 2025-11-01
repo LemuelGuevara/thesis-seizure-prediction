@@ -137,8 +137,9 @@ def compute_stft_epoch(
               shape (F_trim, T).
     """
 
-    nperseg = PreprocessingConfig.sample_rate
-    noverlap = PreprocessingConfig.sample_rate // 2
+    window_length_secs = 2
+    nperseg = int(window_length_secs * PreprocessingConfig.sample_rate)
+    noverlap = nperseg // 2
 
     x = np.asarray(epoch_signal)
     if x.ndim > 1:
