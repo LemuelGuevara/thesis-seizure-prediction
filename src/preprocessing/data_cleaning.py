@@ -209,9 +209,13 @@ def apply_filters(
         BaseRaw: Filtered EEG recording.
     """
 
-    logger.info("Applying bandpass and notch filters")
+    # notch filtering
+    raw.notch_filter(PreprocessingConfig.notch_filter)
+    logger.info(f"Notch filtered: {PreprocessingConfig.notch_filter} Hz")
 
     # bandpass filtering
+
+    logger.info("Applying bandpass and notch filters")
     raw.filter(
         l_freq=PreprocessingConfig.low_cutoff_filter,
         h_freq=PreprocessingConfig.high_cutoff_filter,
@@ -220,9 +224,6 @@ def apply_filters(
         f"Bandpass filtered: {PreprocessingConfig.low_cutoff_filter} - {PreprocessingConfig.high_cutoff_filter} Hz"
     )
 
-    # notch filtering
-    raw.notch_filter(PreprocessingConfig.notch_filter)
-    logger.info(f"Notch filtered: {PreprocessingConfig.notch_filter} Hz")
     return raw
 
 
