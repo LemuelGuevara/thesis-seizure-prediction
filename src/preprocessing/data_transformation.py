@@ -115,7 +115,6 @@ def normalize_array(
 
 def compute_stft_epoch(
     epoch_signal: np.ndarray,
-    max_freq: float = 40.0,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Compute the Short-Time Fourier Transform (STFT) for a 1-D epoch signal.
@@ -147,7 +146,7 @@ def compute_stft_epoch(
     freqs, times, Zxx_full = stft(
         x, fs=PreprocessingConfig.sample_rate, nperseg=nperseg, noverlap=noverlap
     )
-    mask = freqs <= max_freq
+    mask = freqs <= PreprocessingConfig.high_cutoff_filter
 
     Zxx = Zxx_full[mask, :]  # complex (F_trim, T)
     mag = np.abs(Zxx)  # magnitude
