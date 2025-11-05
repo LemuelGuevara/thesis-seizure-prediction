@@ -6,6 +6,7 @@ the time-frequency features and extract them into mosaic tensor.
 """
 
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import cast
 
 import numpy as np
@@ -26,14 +27,36 @@ logger = setup_logger(name="time_frequency_pipeline")
 active_loggers = get_all_active_loggers()
 
 
+def process_epoch(stft_epoch: StftStore, patient_time_frequency_dir: str, idx: int):
+    """
+    Process one STFT epoch → create mosaic → save .npz
+    """
+    stft_mag = stft_epoch.mag
+    stft_mag_avg = np.mean(stft_mag, axis=0)
+    spectrogram_mosaic = create_efficientnet_img(stft_mag_avg)
+
+    out_name = f"{stft_epoch.file_name}_tf"
+    filename = os.path.join(patient_time_frequency_dir, f"{out_name}.npz")
+
+    if not os.path.exists(filename):
+        np.savez_compressed(
+            filename,
+            tensor=spectrogram_mosaic,
+            start=stft_epoch.start,
+            end=stft_epoch.end,
+            phase=stft_epoch.phase,
+            freqs=stft_epoch.freqs,
+            seizure_id=stft_epoch.seizure_id,
+            n_channels=stft_epoch.stft_db.shape[0],
+            file_name=out_name,
+        )
+
+
 def main():
     """
     Data Preprocessing
     - Data transformation for time-frequency branch
-        - Reduce channels: R=mean, G=max, B=std
-        - Global normalization
-        - Resize to 224x224x3
-        - Save to npz
+      (parallelized with ThreadPoolExecutor)
     """
     logger.info("Starting time-frequency pipeline")
 
@@ -61,54 +84,31 @@ def main():
             # 1. Load precomputed stfts (all channels)
             loaded_stft_epochs = load_precomputed_stfts(patient_stfts_dir)
 
-            # 3. Process each window
-            for idx, stft_epoch in enumerate(
-                tqdm(loaded_stft_epochs, desc="Processing epochs", leave=False)
-            ):
-                stft_epoch = cast(StftStore, stft_epoch)
-
-                # stft_band_averaged = band_average_stft(stft)
-                stft_mag = stft_epoch.mag
-                stft_mag_avg = np.mean(stft_mag, axis=0)
-
-                # 6. Resize to 224x224x3
-                spectrogram_mosaic = create_efficientnet_img(stft_mag_avg)
-                logger.info(
-                    f"Spectrogram shape: {spectrogram_mosaic.shape} | "
-                    f"Epoch index: {idx} | "
-                    f"Start: {stft_epoch.start} | "
-                    f"End: {stft_epoch.end} | "
-                    f"Phase: {stft_epoch.phase}"
-                )
-
-                # 7. Save to npz
-                out_name = f"{stft_epoch.file_name}_tf"
-                filename = os.path.join(patient_time_frequency_dir, f"{out_name}.npz")
-
-                if not os.path.exists(filename):
-                    np.savez_compressed(
-                        filename,
-                        tensor=spectrogram_mosaic,
-                        start=stft_epoch.start,
-                        end=stft_epoch.end,
-                        phase=stft_epoch.phase,
-                        freqs=stft_epoch.freqs,
-                        seizure_id=stft_epoch.seizure_id,
-                        n_channels=stft_epoch.stft_db.shape[0],
-                        file_name=out_name,
+            # 2. Process each epoch in parallel
+            with ThreadPoolExecutor(max_workers=os.cpu_count() or 4) as executor:
+                futures = [
+                    executor.submit(
+                        process_epoch,
+                        cast(StftStore, stft),
+                        patient_time_frequency_dir,
+                        idx,
                     )
+                    for idx, stft in enumerate(loaded_stft_epochs)
+                ]
+
+                # tqdm progress bar while futures complete
+                for _ in tqdm(
+                    as_completed(futures),
+                    total=len(futures),
+                    desc="Processing epochs",
+                    leave=False,
+                ):
+                    pass
 
             logger.info(
                 f"Finished building time-frequency mosaics for patient {patient_id}"
             )
             logger.info(f"Results saved in: {patient_time_frequency_dir}")
-
-            os.makedirs(DataConfig.runs_dir, exist_ok=True)
-
-            precomputed_tf_summary_path = os.path.join(
-                DataConfig.runs_dir, "precomputed_tf.csv"
-            )
-            fieldnames = ["patient_id", "mosaics"]
 
 
 if __name__ == "__main__":
