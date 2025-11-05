@@ -11,7 +11,6 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 from typing import Tuple
 
-import h5py
 import numpy as np
 from mne.io.base import BaseRaw
 from PIL import Image
@@ -236,29 +235,20 @@ def precompute_stft(
     normalization_method: str = "minmax",
 ):
     """
-    Precompute STFTs for all epochs and save each epoch as an HDF5 file.
+    Precompute STFTs for all epochs and save each epoch as a compressed .npz file.
     All channels are saved in a single file per epoch.
     """
-    # TODO: perform undersampling here wherein we match the number of epochs of intericals
-    # with the number of epochs of preictals
-
-    # The logic:
-    # 1. loop through the segmented intervals then make 2 lists for preictals and interictals separately
-    # 2. add the epoch intervals accordingly to their phase e.g. interictal -> interictals_list
-    # 3. apply random.sample to interictals list wherein N is the number of preictal epochs
 
     phase_counts = {}
     for epoch in segmented_epochs:
         phase_counts[epoch.phase] = phase_counts.get(epoch.phase, 0) + 1
     logger.info(f"Epochs by phase: {phase_counts}")
-
     logger.info(f"Normalize power: {normalize_power}")
 
     sfreq = float(recording.info["sfreq"])
     os.makedirs(patient_stfts_dir, exist_ok=True)
 
-    h5_lock = Lock()
-
+    file_lock = Lock()
     tasks = list(enumerate(segmented_epochs))
 
     def _save_stft_epoch(task: tuple[int, IntervalMeta]) -> bool:
@@ -268,10 +258,10 @@ def precompute_stft(
 
         stem = os.path.splitext(os.path.basename(str(epoch.file_name)))[0]
         base_name = f"{epoch.phase}_{stem}_{int(epoch.start):06d}_{int(epoch.end):06d}"
-        out_name = f"{base_name}.h5"
+        out_name = f"{base_name}.npz"
         filename = os.path.join(patient_stfts_dir, out_name)
 
-        # Quick check to skip existing files
+        # Skip if already exists
         if os.path.exists(filename):
             return False
 
@@ -287,37 +277,21 @@ def precompute_stft(
             np.asarray(data), epoch, normalize_power, idx
         )
 
-        try:
-            # Thread-safe write
-            with h5_lock:
-                with h5py.File(filename, "w") as f:
-                    f.create_dataset("Zxx", data=computed_stft.Zxx, compression="gzip")
-                    f.create_dataset(
-                        "stft_db", data=computed_stft.stft_db, compression="gzip"
-                    )
-                    f.create_dataset("mag", data=computed_stft.mag, compression="gzip")
-                    f.create_dataset(
-                        "freqs", data=computed_stft.freqs, compression="gzip"
-                    )
-                    f.create_dataset(
-                        "times", data=computed_stft.times, compression="gzip"
-                    )
-                    if getattr(computed_stft, "power", None) is not None:
-                        f.create_dataset(
-                            "power", data=computed_stft.power, compression="gzip"
-                        )
-
-                    # Save metadata as attributes
-                    f.attrs["phase"] = computed_stft.phase
-                    f.attrs["start"] = computed_stft.start
-                    f.attrs["end"] = computed_stft.end
-                    f.attrs["seizure_id"] = computed_stft.seizure_id
-                    f.attrs["file_name"] = base_name
-
-            return True
-        except Exception as e:
-            logger.error(f"Failed to save {filename}: {e}")
-            return False
+        np.savez_compressed(
+            filename,
+            Zxx=computed_stft.Zxx,
+            stft_db=computed_stft.stft_db,
+            mag=computed_stft.mag,
+            freqs=computed_stft.freqs,
+            times=computed_stft.times,
+            power=getattr(computed_stft, "power", np.empty((0,), dtype=np.float32)),
+            phase=computed_stft.phase,
+            start=computed_stft.start,
+            end=computed_stft.end,
+            seizure_id=computed_stft.seizure_id,
+            file_name=base_name,
+        )
+        return True
 
     # Parallel execution for STFT computation
     with ThreadPoolExecutor(max_workers=os.cpu_count() or 1) as pool:

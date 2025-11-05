@@ -7,7 +7,6 @@ modules.
 
 import os
 
-import h5py
 import numpy as np
 
 from src.datatypes import StftStore
@@ -26,31 +25,30 @@ def load_precomputed_stfts(patient_stfts_dir: str) -> list[StftStore]:
 
     # List all .h5 files sorted
     epoch_files = sorted(
-        f for f in os.listdir(patient_stfts_dir) if f.lower().endswith(".h5")
+        f for f in os.listdir(patient_stfts_dir) if f.lower().endswith(".npz")
     )
 
     stft_store_list: list[StftStore] = []
 
     for epoch_file in epoch_files:
         full_path = os.path.join(patient_stfts_dir, epoch_file)
+        data = np.load(full_path)
 
-        with h5py.File(full_path, "r") as f:
-            stft_store_list.append(
-                StftStore(
-                    phase=f.attrs["phase"],
-                    start=f.attrs["start"],
-                    end=f.attrs["end"],
-                    stft_db=f["stft_db"][:],
-                    power=f["power"][:]
-                    if "power" in f
-                    else np.empty((0,), dtype=np.float32),
-                    Zxx=f["Zxx"][:],
-                    mag=f["mag"][:],
-                    freqs=f["freqs"][:],
-                    times=f["times"][:],
-                    seizure_id=int(f.attrs.get("seizure_id", -1)),
-                    file_name=str(f.attrs["file_name"]),
-                )
-            )
+        stft_store = StftStore(
+            phase=data["phase"],
+            start=int(data["start"]),
+            end=int(data["end"]),
+            stft_db=data["stft_db"],
+            power=data["power"]
+            if "power" in data
+            else np.empty((0,), dtype=np.float32),
+            Zxx=data["Zxx"],
+            mag=data["mag"],
+            freqs=data["freqs"],
+            times=data["times"],
+            seizure_id=int(data["seizure_id"]) if "seizure_id" in data else -1,
+            file_name=str(data["file_name"]) if "file_name" in data else epoch_file,
+        )
 
+        stft_store_list.append(stft_store)
     return stft_store_list
