@@ -13,7 +13,7 @@ from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
 from src.config import DataConfig
-from src.datatypes import StftStore
+from src.datatypes import StftData
 from src.logger import get_all_active_loggers, setup_logger
 from src.preprocessing.bispectrum_branch import bispectrum_estimation
 from src.preprocessing.data_transformation import (
@@ -61,7 +61,7 @@ def main():
             for idx, stft_epoch in enumerate(
                 tqdm(loaded_stft_epochs, desc="Processing epochs", leave=False)
             ):
-                stft_epoch = cast(StftStore, stft_epoch)
+                stft_epoch = cast(StftData, stft_epoch)
                 Zxx = stft_epoch.Zxx  # (C, F, T)
                 freqs = stft_epoch.freqs
 

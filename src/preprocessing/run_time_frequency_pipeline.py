@@ -14,7 +14,7 @@ from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
 from src.config import DataConfig
-from src.datatypes import StftStore
+from src.datatypes import StftData
 from src.logger import get_all_active_loggers, setup_logger
 from src.preprocessing.data_transformation import (
     create_efficientnet_img,
@@ -27,7 +27,7 @@ logger = setup_logger(name="time_frequency_pipeline")
 active_loggers = get_all_active_loggers()
 
 
-def process_epoch(stft_epoch: StftStore, patient_time_frequency_dir: str, idx: int):
+def process_epoch(stft_epoch: StftData, patient_time_frequency_dir: str, idx: int):
     """
     Process one STFT epoch → create mosaic → save .npz
     """
@@ -89,7 +89,7 @@ def main():
                 futures = [
                     executor.submit(
                         process_epoch,
-                        cast(StftStore, stft),
+                        cast(StftData, stft),
                         patient_time_frequency_dir,
                         idx,
                     )

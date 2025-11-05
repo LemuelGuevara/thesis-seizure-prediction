@@ -20,7 +20,7 @@ class IntervalMeta:
 
 
 @dataclass(kw_only=True)
-class StftStore(IntervalMeta):
+class StftData(IntervalMeta):
     stft_db: np.ndarray
     power: np.ndarray
     Zxx: np.ndarray

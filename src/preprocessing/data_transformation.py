@@ -18,7 +18,7 @@ from scipy.signal import stft
 from tqdm import tqdm
 
 from src.config import PreprocessingConfig
-from src.datatypes import IntervalMeta, StftStore
+from src.datatypes import IntervalMeta, StftData
 from src.logger import setup_logger
 
 logger = setup_logger(name="data_transformation")
@@ -159,7 +159,7 @@ def compute_stft_epoch(
 
 def compute_stft_for_epoch(
     data: np.ndarray, interval: IntervalMeta, normalize_power: bool, epoch_idx: int
-) -> StftStore:
+) -> StftData:
     """
     Compute STFT for one EEG segment that includes multiple channels.
 
@@ -172,7 +172,7 @@ def compute_stft_for_epoch(
         StftStore: stores multi-channel STFT results (each key stores per-channel arrays)
     """
     if data.size == 0:
-        return StftStore(
+        return StftData(
             start=interval.start,
             end=interval.end,
             phase=interval.phase,
@@ -213,7 +213,7 @@ def compute_stft_for_epoch(
     Zxx_all = np.stack(Zxx_list, axis=0)
     stft_mag_all = np.stack(stft_mag_list, axis=0)
 
-    return StftStore(
+    return StftData(
         start=interval.start,
         end=interval.end,
         phase=interval.phase,

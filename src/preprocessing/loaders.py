@@ -9,10 +9,10 @@ import os
 
 import numpy as np
 
-from src.datatypes import StftStore
+from src.datatypes import StftData
 
 
-def load_precomputed_stfts(patient_stfts_dir: str) -> list[StftStore]:
+def load_precomputed_stfts(patient_stfts_dir: str) -> list[StftData]:
     """
     Load precomputed STFT (.h5) files for a single patient when STFTs are stored per epoch.
 
@@ -28,13 +28,13 @@ def load_precomputed_stfts(patient_stfts_dir: str) -> list[StftStore]:
         f for f in os.listdir(patient_stfts_dir) if f.lower().endswith(".npz")
     )
 
-    stft_store_list: list[StftStore] = []
+    stft_store_list: list[StftData] = []
 
     for epoch_file in epoch_files:
         full_path = os.path.join(patient_stfts_dir, epoch_file)
         data = np.load(full_path)
 
-        stft_store = StftStore(
+        stft_store = StftData(
             phase=data["phase"],
             start=int(data["start"]),
             end=int(data["end"]),

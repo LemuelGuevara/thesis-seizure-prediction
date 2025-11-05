@@ -10,7 +10,7 @@ NOTE: STFT related that will be passed in the functions will be the precomputed 
 import numpy as np
 
 from src.config import PreprocessingConfig
-from src.datatypes import BandTimeStore, StftStore
+from src.datatypes import BandTimeStore, StftData
 from src.logger import setup_logger
 
 logger = setup_logger(name="time_frequency_branch")
@@ -61,7 +61,7 @@ def group_power_into_bands(
 
 
 def create_band_groupings_per_channel(
-    stfts_by_channel: dict[str, list[StftStore]],
+    stfts_by_channel: dict[str, list[StftData]],
 ) -> dict[str, list[BandTimeStore]]:
     """
     Convert stfts_by_channel (which contain linear power) into band-time maps per channel.
