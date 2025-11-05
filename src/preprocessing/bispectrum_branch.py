@@ -72,7 +72,7 @@ def compute_band_average_stft_coeffs(
     return band_complex, band_centers
 
 
-def bispectrum_estimation(Zxx: np.ndarray, freqs: np.ndarray, n_threads: int = 8):
+def bispectrum_estimation(Zxx: np.ndarray, freqs: np.ndarray):
     """
     Multithreaded bispectrum estimation.
 
@@ -99,7 +99,7 @@ def bispectrum_estimation(Zxx: np.ndarray, freqs: np.ndarray, n_threads: int = 8
         return freq1, row
 
     # run in parallel
-    with ThreadPoolExecutor(max_workers=n_threads) as executor:
+    with ThreadPoolExecutor(max_workers=os.cpu_count() or 1) as executor:
         for freq1, row in executor.map(compute_row, range(n_bins)):
             bispectrum[freq1, :] = row
 
