@@ -297,6 +297,8 @@ def segment_recordings(
         sampled_interictals = random.sample(
             interictal_intervals, len(preictal_intervals)
         )
+    else:
+        sampled_interictals = interictal_intervals
 
     # Reinintialize precital and interictal seizure ids to start at 0 again
     for new_id, preictal in enumerate(preictal_intervals):
