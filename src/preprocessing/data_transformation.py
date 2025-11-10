@@ -313,61 +313,71 @@ def precompute_stft(
 
 def normalize_to_imagenet(img: np.ndarray) -> np.ndarray:
     """
-    Normalize an image to ImageNet statistics in channel-first format (C, H, W).
+    Normalize an image to ImageNet statistics in channel-first format (H, W, C).
     Converts grayscale to 3-channel if needed.
     """
+    if img.ndim != 3 or img.shape[-1] != 3:
+        raise ValueError(f"Expected (H, W, 3), got {img.shape}")
+
     img = np.asarray(img, dtype=np.float32)
+    if img.max() > 1.0:
+        img = img / 255.0
 
-    # Ensure channel-first (C, H, W)
-    if img.ndim == 2:  # (H, W)
-        img = np.stack([img] * 3, axis=0)
-    elif img.ndim == 3 and img.shape[0] not in (1, 3):  # (H, W, C) -> (C, H, W)
-        img = np.transpose(img, (2, 0, 1))
-    elif img.ndim == 3 and img.shape[0] == 1:  # (1, H, W)
-        img = np.repeat(img, 3, axis=0)
+    mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+    std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
-    # Scale to [0, 1]
-    img = img / 255.0
+    return (img - mean[None, None, :]) / std[None, None, :]
 
-    # ImageNet normalization
-    mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)[:, None, None]  # (3,1,1)
-    std = np.array([0.229, 0.224, 0.225], dtype=np.float32)[:, None, None]  # (3,1,1)
-    return (img - mean) / std
+
+def group_freqs_into_bands(magnitude: np.ndarray, freqs: np.ndarray) -> np.ndarray:
+    eeg_bands = PreprocessingConfig.band_defs
+
+    n = min(len(freqs), magnitude.shape[0])
+    freqs = freqs[:n]
+    magnitude = magnitude[:n, :]
+
+    eeg_band_zxx = {}
+    for band, (low_freq, high_freq) in eeg_bands.items():
+        freq_idx = np.where((freqs >= low_freq) & (freqs < high_freq))[0]
+        if len(freq_idx) == 0:
+            eeg_band_zxx[band] = np.zeros(magnitude.shape[1])
+        else:
+            eeg_band_zxx[band] = np.mean(magnitude[freq_idx, :], axis=0)
+
+        band_data = eeg_band_zxx[band]
+        logger.info(
+            f"{band}: mean={np.mean(band_data):.4f}, "
+            f"max={np.max(band_data):.4f}, "
+            f"std={np.std(band_data):.4f}"
+        )
+
+    bands = ["theta", "alpha", "beta"]
+    band_matrix = np.stack([eeg_band_zxx[b] for b in bands], axis=1)
+    return np.transpose(band_matrix, (0, 2, 1))
 
 
 def create_efficientnet_img(data: np.ndarray, target_size=(224, 224)) -> np.ndarray:
-    """
-    Resize a 2D or 3D spectrogram to target size (224x224) while keeping float values in 0–1.
-    Returns channel-first (C, H, W) array for PyTorch.
-
-    Accepts:
-        - (H, W)
-        - (H, W, 3)
-        - (3, H, W)
-    """
     logger.info(f"Data shape (before): {data.shape}")
     data = np.asarray(data, dtype=float)
 
     scaled_data = (data - np.min(data)) / (np.max(data) - np.min(data) + 1e-8)
     scaled_data = (scaled_data * 255).astype(np.uint8)
+    logger.info(f"After scaling: {scaled_data.shape}, dtype={scaled_data.dtype}")
+
+    scaled_data = np.squeeze(scaled_data)
 
     if scaled_data.ndim == 2:
-        rgb_data = np.stack([scaled_data] * 3, axis=-1)  # (H, W, 3)
+        rgb_data = np.stack([scaled_data] * 3, axis=-1)
     elif scaled_data.ndim == 3:
         if scaled_data.shape[0] == 3:
             rgb_data = np.transpose(scaled_data, (1, 2, 0))
-        elif scaled_data.shape[2] == 3:
-            rgb_data = scaled_data
         else:
-            raise ValueError(f"Expected 3 channels, got shape {scaled_data.shape}")
+            rgb_data = scaled_data
     else:
-        raise ValueError(f"Unsupported data shape: {scaled_data.shape}")
+        raise ValueError(f"Unexpected ndim: {scaled_data.ndim}")
 
-    img = Image.fromarray(rgb_data, "RGB")
-    img = img.resize(target_size, resample=Image.Resampling.BICUBIC)
-
-    img_arr = np.array(img).astype(np.float32)
-    img_arr = np.transpose(img_arr, (2, 0, 1))  # (H, W, C) -> (C, H, W)
-
+    img = Image.fromarray(rgb_data, mode="RGB")
+    img_resized = img.resize(target_size, Image.Resampling.LANCZOS)
+    img_arr = np.array(img_resized, dtype=np.uint8)
     logger.info(f"Data shape (after): {img_arr.shape}")
     return img_arr

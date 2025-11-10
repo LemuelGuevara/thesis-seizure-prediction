@@ -72,39 +72,51 @@ def compute_band_average_stft_coeffs(
     return band_complex, band_centers
 
 
-def bispectrum_estimation(Zxx: np.ndarray, freqs: np.ndarray):
+# Fixed bispectrum estimation function
+def bispectrum_estimation(
+    Zxx: np.ndarray, freqs: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Multithreaded bispectrum estimation.
 
     Args:
-        Zxx (np.ndarray): STFT complex coefficients (F, T)
+        Zxx (np.ndarray): STFT complex coefficients (C, F, T)
         freqs (np.ndarray): Frequency bins (F,)
-        n_threads (int): Number of threads to use
 
     Returns:
-        np.ndarray: Bispectrum magnitude (in dB), shape (F, F)
+        tuple: (bispectrum_mag, bispectrum_db)
+            - bispectrum_mag: (C, F, F) in log scale for better visualization
+            - bispectrum_db: (C, F, F) in decibels per channel
     """
-    n_bins = Zxx.shape[0]
-    bispectrum = np.zeros((n_bins, n_bins), dtype=np.complex128)
+    n_channels, n_bins, _ = Zxx.shape
+    bispectrum = np.zeros((n_channels, n_bins, n_bins), dtype=np.complex128)
+
+    Zxx_norm = Zxx / (np.max(np.abs(Zxx), axis=(1, 2), keepdims=True) + 1e-20)
 
     def compute_row(freq1: int):
         """Compute one row of the bispectrum (fixed freq1)."""
-        row = np.zeros(n_bins, dtype=np.complex128)
+        row = np.zeros((n_channels, n_bins), dtype=np.complex128)
         for freq2 in range(n_bins - freq1):
             freq3 = freq1 + freq2
             if freq3 < n_bins:
-                row[freq2] = np.mean(
-                    Zxx[freq1, :] * Zxx[freq2, :] * np.conj(Zxx[freq3, :])
+                # Mean over time (axis=-1)
+                row[:, freq2] = np.mean(
+                    Zxx_norm[:, freq1, :]
+                    * Zxx_norm[:, freq2, :]
+                    * np.conj(Zxx_norm[:, freq3, :]),
+                    axis=-1,
                 )
         return freq1, row
 
-    # run in parallel
+    # Run in parallel
     with ThreadPoolExecutor(max_workers=os.cpu_count() or 1) as executor:
         for freq1, row in executor.map(compute_row, range(n_bins)):
-            bispectrum[freq1, :] = row
+            bispectrum[:, freq1, :] = row
 
-    bispectrum_db = 20.0 * np.log10(np.abs(bispectrum) + _EPS)
-    return bispectrum_db
+    bispectrum_mag = np.abs(bispectrum)  # (C, F, F)
+    bispectrum_db = 20.0 * bispectrum_mag
+
+    return bispectrum_mag, bispectrum_db
 
 
 def compute_bispectrum_estimation(

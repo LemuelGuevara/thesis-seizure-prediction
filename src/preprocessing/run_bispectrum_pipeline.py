@@ -18,6 +18,7 @@ from src.logger import get_all_active_loggers, setup_logger
 from src.preprocessing.bispectrum_branch import bispectrum_estimation
 from src.preprocessing.data_transformation import (
     create_efficientnet_img,
+    group_freqs_into_bands,
 )
 from src.preprocessing.loaders import load_precomputed_stfts
 from src.utils import is_precomputed_data_exists
@@ -66,17 +67,14 @@ def main():
                 freqs = stft_epoch.freqs
 
                 # 2–3. Compute bispectrum per channel*
-                bispectrum_list = []
-                for ch in range(Zxx.shape[0]):
-                    bispectrum_db = bispectrum_estimation(Zxx=Zxx[ch], freqs=freqs)
-                    bispectrum_list.append(bispectrum_db)
-                bispectrum_all = np.stack(bispectrum_list, axis=0)
-                bispectrum_avg = np.mean(bispectrum_all, axis=0)
+
+                bispectrum_mag, _ = bispectrum_estimation(Zxx=Zxx, freqs=freqs)
+                bis_grouped_by_band = group_freqs_into_bands(bispectrum_mag, freqs)
 
                 # 4. Resize to 224x224x3
-                bispectrum_mosaic = create_efficientnet_img(bispectrum_avg)
+                bispectra = create_efficientnet_img(bis_grouped_by_band)
                 logger.info(
-                    f"Bispectrum shape: {bispectrum_mosaic.shape} | "
+                    f"Bispectrum shape: {bis_grouped_by_band.shape} | "
                     f"Epoch index: {idx} | "
                     f"Start: {stft_epoch.start} | "
                     f"End: {stft_epoch.end} | "
@@ -90,7 +88,7 @@ def main():
                 if not os.path.exists(filename):
                     np.savez_compressed(
                         filename,
-                        tensor=bispectrum_mosaic,
+                        tensor=bispectra,
                         start=stft_epoch.start,
                         end=stft_epoch.end,
                         phase=stft_epoch.phase,
