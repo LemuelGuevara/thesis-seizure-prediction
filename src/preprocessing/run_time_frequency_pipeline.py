@@ -18,6 +18,7 @@ from src.datatypes import StftData
 from src.logger import get_all_active_loggers, setup_logger
 from src.preprocessing.data_transformation import (
     create_efficientnet_img,
+    group_freqs_into_bands,
 )
 from src.utils import is_precomputed_data_exists
 
@@ -28,20 +29,17 @@ active_loggers = get_all_active_loggers()
 
 
 def process_epoch(stft_epoch: StftData, patient_time_frequency_dir: str, idx: int):
-    """
-    Process one STFT epoch → create mosaic → save .npz
-    """
-    stft_mag = stft_epoch.mag
-    stft_mag_avg = np.mean(stft_mag, axis=0)
-    spectrogram_mosaic = create_efficientnet_img(stft_mag_avg)
+    try:
+        magnitude = stft_epoch.mag
+        freqs = stft_epoch.freqs
+        tf_grouped_by_band = group_freqs_into_bands(magnitude, freqs)
+        spectrogram = create_efficientnet_img(tf_grouped_by_band)
 
-    out_name = f"{stft_epoch.file_name}_tf"
-    filename = os.path.join(patient_time_frequency_dir, f"{out_name}.npz")
-
-    if not os.path.exists(filename):
+        out_name = f"{stft_epoch.file_name}_tf"
+        filename = os.path.join(patient_time_frequency_dir, f"{out_name}.npz")
         np.savez_compressed(
             filename,
-            tensor=spectrogram_mosaic,
+            tensor=spectrogram,
             start=stft_epoch.start,
             end=stft_epoch.end,
             phase=stft_epoch.phase,
@@ -50,6 +48,9 @@ def process_epoch(stft_epoch: StftData, patient_time_frequency_dir: str, idx: in
             n_channels=stft_epoch.stft_db.shape[0],
             file_name=out_name,
         )
+    except Exception as e:
+        logger.error(f"Epoch {idx} FAILED: {e}", exc_info=True)
+        raise
 
 
 def main():

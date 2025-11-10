@@ -49,8 +49,8 @@ class PairedEEGDataset(Dataset):
 
         common_keys = sorted(set(tf_map.keys()) & set(bis_map.keys()))
 
-        tf_list: list[np.ndarray] = []
-        bis_list: list[np.ndarray] = []
+        tf_list: list[torch.Tensor] = []
+        bis_list: list[torch.Tensor] = []
         labels_list: list[int] = []
         seizure_id_list: list[int] = []
 
@@ -70,8 +70,11 @@ class PairedEEGDataset(Dataset):
             # Normalize to imagenet specs
             tf_image = normalize_to_imagenet(tf_image)
 
-            bis_image = bis_image.astype(np.float32)
+            bis_image = bis_image / 255.0
             bis_image = (bis_image - bis_image.mean()) / (bis_image.std() + 1e-8)
+
+            tf_tensor = torch.from_numpy(tf_image).permute(2, 0, 1)
+            bis_tensor = torch.from_numpy(bis_image).permute(2, 0, 1)
 
             seizure_id = int(np.load(tf_path)["seizure_id"])
 
@@ -80,18 +83,14 @@ class PairedEEGDataset(Dataset):
                 f"Labelled {label} for {os.path.basename(tf_path)} and {os.path.basename(bis_path)} | seizure id: {seizure_id}"
             )
 
-            tf_list.append(tf_image)
-            bis_list.append(bis_image)
+            tf_list.append(tf_tensor)
+            bis_list.append(bis_tensor)
             labels_list.append(label)
             seizure_id_list.append(seizure_id)
 
         # Convert features, labels, and ids into tensors
-        self.tf_features: torch.Tensor = torch.tensor(
-            np.stack(tf_list), dtype=torch.float32
-        )
-        self.bis_features: torch.Tensor = torch.tensor(
-            np.stack(bis_list), dtype=torch.float32
-        )
+        self.tf_features: torch.Tensor = torch.stack(tf_list)
+        self.bis_features: torch.Tensor = torch.stack(bis_list)
         self.labels: torch.Tensor = torch.tensor(labels_list, dtype=torch.long)
         self.seizure_ids: torch.Tensor = torch.tensor(seizure_id_list, dtype=torch.long)
 
@@ -201,6 +200,15 @@ def get_loocv_fold(
     tf_test = tf_features[test_mask]
     bis_test = bis_features[test_mask]
     labels_test = labels[test_mask]
+
+    logger.info(
+        f"""Normalization stats:
+    TF Train: min={tf_train.min():.4f}, max={tf_train.max():.4f}, mean={tf_train.mean():.4f}, std={tf_train.std():.4f}
+    BIS Train: min={bis_train.min():.4f}, max={bis_train.max():.4f}, mean={bis_train.mean():.4f}, std={bis_train.std():.4f}
+    TF Test:  min={tf_test.min():.4f},  max={tf_test.max():.4f},  mean={tf_test.mean():.4f},  std={tf_test.std():.4f}
+    BIS Test: min={bis_test.min():.4f}, max={bis_test.max():.4f}, mean={bis_test.mean():.4f}, std={bis_test.std():.4f}
+    """
+    )
 
     return (tf_train, bis_train, labels_train), (tf_test, bis_test, labels_test)
 

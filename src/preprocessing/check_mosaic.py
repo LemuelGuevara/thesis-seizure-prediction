@@ -18,12 +18,22 @@ def load_npz_data(npz_path: str):
 
 def plot_spectrogram(ax, tensor, start, end, phase, freqs, n_channels):
     """Plot RGB spectrogram (freq × time × 3)."""
-    print(tensor.shape)
-    duration_sec = end - start
+    print(f"Spectrogram shape: {tensor.shape}")
 
+    # Check if truly RGB or grayscale duplicated
+    if tensor.shape[-1] == 3:
+        ch_diff = (
+            np.abs(tensor[..., 0] - tensor[..., 1]).sum()
+            + np.abs(tensor[..., 1] - tensor[..., 2]).sum()
+        )
+        is_rgb = ch_diff > 1e-6
+        print(
+            f"RGB check: {'True RGB' if is_rgb else 'Grayscale duplicated'} (channel diff: {ch_diff:.2e})"
+        )
+
+    duration_sec = end - start
     img = ax.imshow(
         tensor[..., 0],
-        cmap="viridis",
         origin="lower",
         aspect="auto",
         extent=[0, duration_sec, freqs[0], freqs[-1]],
@@ -36,7 +46,19 @@ def plot_spectrogram(ax, tensor, start, end, phase, freqs, n_channels):
 
 def plot_bispectrum(ax, tensor, phase, start, end, freqs):
     """Plot RGB bispectrum (freq × freq × 3)."""
-    print(tensor.shape)
+    print(f"Bispectrum shape: {tensor.shape}")
+
+    # Check if truly RGB or grayscale duplicated
+    if tensor.shape[-1] == 3:
+        ch_diff = (
+            np.abs(tensor[..., 0] - tensor[..., 1]).sum()
+            + np.abs(tensor[..., 1] - tensor[..., 2]).sum()
+        )
+        is_rgb = ch_diff > 1e-6
+        print(
+            f"RGB check: {'True RGB' if is_rgb else 'Grayscale duplicated'} (channel diff: {ch_diff:.2e})"
+        )
+
     duration_sec = end - start
     freq_max = freqs[-1]
     img = ax.imshow(
@@ -97,10 +119,10 @@ def view_timefreq_and_bispectrum(tf_npz: str | None = None, bis_npz: str | None 
 
 
 if __name__ == "__main__":
-    patient = 2
+    patient = 14
     patient_id = f"{patient:02d}"
-    tf_file = f"precomputed_data/patient_{patient_id}/time-frequency/preictal_chb02_16+_001172_001202_tf.npz"
-    bis_file = f"precomputed_data/patient_{patient_id}/bispectrum/preictal_chb02_16+_001172_001202_bis.npz"
+    tf_file = f"precomputed_data/patient_{patient_id}/time-frequency/preictal_chb14_18_000075_000105_tf.npz"
+    bis_file = f"precomputed_data/patient_{patient_id}/bispectrum/interictal_chb14_42_002850_002880_bis.npz"
 
     # view both if available
     if os.path.exists(tf_file) and os.path.exists(bis_file):
