@@ -2,6 +2,7 @@ import math
 import os
 from datetime import datetime
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -243,9 +244,12 @@ def main():
             patient_train_accuracies = train_accuracies
             patient_val_accuracies = val_accuracies
 
+        training_accuracy = round(np.mean(patient_train_accuracies), 4)
+
         accuracy = round(accuracy_score(all_labels, all_preds), 4)
         recall = round(recall_score(all_labels, all_preds), 4)
         f1 = round(f1_score(all_labels, all_preds), 4)
+
         cf_matrix = confusion_matrix(all_labels, all_preds, labels=[0, 1])
         TN, FP, FN, TP = cf_matrix.ravel()
 
@@ -258,6 +262,7 @@ def main():
             "false_positives",
             "true_negatives",
             "false_negatives",
+            "training_accuracy",
             "accuracy",
             "recall",
             "f1_score",
@@ -271,6 +276,7 @@ def main():
             FP,
             TN,
             FN,
+            training_accuracy,
             accuracy,
             recall,
             f1,
@@ -309,6 +315,7 @@ def main():
             "false_positives",
             "true_negatives",
             "false_negatives",
+            "training_accuracy",
             "accuracy",
             "recall",
             "f1_score",

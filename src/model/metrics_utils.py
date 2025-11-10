@@ -40,6 +40,7 @@ class TrainingResults:
     false_positives: int
     true_negatives: int
     false_negatives: int
+    training_accuracy: float
     accuracy: float
     recall: float
     f1_score: float
@@ -56,7 +57,7 @@ os.makedirs(setup_dir, exist_ok=True)
 
 
 def show_training_results(
-    field_names: list[str], training_results: list["TrainingResults"]
+    field_names: list[str], training_results: list[TrainingResults]
 ) -> None:
     table = PrettyTable()
     table.field_names = field_names
