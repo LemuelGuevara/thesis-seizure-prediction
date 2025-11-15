@@ -108,35 +108,40 @@ def main():
         # Patient-level accumulators
         all_preds, all_labels = [], []
 
-        patient_train_losses, patient_val_losses = [], []
-        patient_train_accuracies, patient_val_accuracies = [], []
+        patient_train_losses, patient_validation_losses = [], []
+        patient_train_accuracies, patient_validation_accuracies = [], []
 
         for fold_idx in tqdm(range(n_folds), desc="Seizure folds"):
-            train_losses, val_losses = [], []
-            train_accuracies, val_accuracies = [], []
+            train_losses, validation_losses = [], []
+            train_accuracies, validation_accuracies = [], []
 
             # LOSO Fold features
-            (tf_train, bis_train, labels_train), (tf_test, bis_test, labels_test) = (
-                get_loocv_fold(dataset, n_chunks, n_folds, fold_idx)
-            )
+            (
+                (tf_train, bis_train, labels_train),
+                (tf_validation, bis_validation, labels_validation),
+            ) = get_loocv_fold(dataset, n_chunks, n_folds, fold_idx)
 
             train_set = TensorDataset(tf_train, bis_train, labels_train)
-            test_set = TensorDataset(tf_test, bis_test, labels_test)
+            validation_set = TensorDataset(
+                tf_validation, bis_validation, labels_validation
+            )
 
             # Data loaders
-            train_loader, test_loader = get_data_loaders(
+            train_loader, validation_loader = get_data_loaders(
                 train_set,
-                test_set,
+                validation_set,
                 batch_size=DataLoaderConfig.batch_size,
                 pin_memory=False,
             )
 
             unique_train, counts_train = torch.unique(labels_train, return_counts=True)
-            unique_test, counts_test = torch.unique(labels_test, return_counts=True)
+            unique_validation, counts_test = torch.unique(
+                labels_validation, return_counts=True
+            )
             logger.info(
                 f"[Patient {patient_id} | Fold {fold_idx}] "
                 f"Train class dist: {dict(zip(unique_train.tolist(), counts_train.tolist()))} | "
-                f"Test class dist: {dict(zip(unique_test.tolist(), counts_test.tolist()))}"
+                f"Validation class dist: {dict(zip(unique_validation.tolist(), counts_test.tolist()))}"
             )
 
             # Initialize model
@@ -174,13 +179,13 @@ def main():
                 average_train_loss = train_loss_sum / len(train_loader)
                 average_train_accuracy = train_acc_sum / len(train_loader)
 
-                val_loss_sum = 0.0
-                val_correct = 0
-                val_total = 0
+                validation_loss_sum = 0.0
+                validation_correct = 0
+                validation_total = 0
 
                 model.eval()
                 with torch.no_grad():
-                    for batch_tf, batch_bis, batch_labels in test_loader:
+                    for batch_tf, batch_bis, batch_labels in validation_loader:
                         batch_tf, batch_bis, batch_labels = (
                             batch_tf.to(device),
                             batch_bis.to(device),
@@ -190,17 +195,19 @@ def main():
                         loss = criterion(outputs, batch_labels)
                         preds = torch.argmax(outputs, dim=1)
 
-                        val_loss_sum += loss.item()
-                        val_correct += (preds == batch_labels).sum().item()
-                        val_total += batch_labels.size(0)
+                        validation_loss_sum += loss.item()
+                        validation_correct += (preds == batch_labels).sum().item()
+                        validation_total += batch_labels.size(0)
 
-                average_validation_loss = val_loss_sum / len(test_loader)
-                average_validation_accuracy = val_correct / max(1, val_total)
+                average_validation_loss = validation_loss_sum / len(validation_loader)
+                average_validation_accuracy = validation_correct / max(
+                    1, validation_total
+                )
 
                 train_losses.append(average_train_loss)
                 train_accuracies.append(average_train_accuracy)
-                val_losses.append(average_validation_loss)
-                val_accuracies.append(average_validation_accuracy)
+                validation_losses.append(average_validation_loss)
+                validation_accuracies.append(average_validation_accuracy)
 
                 logger.info(
                     f"[Patient {patient_id} | Fold {fold_idx + 1}] "
@@ -221,11 +228,11 @@ def main():
             if early_stopping.best_model_state is not None:
                 model.load_state_dict(early_stopping.best_model_state)
 
-            # ONE final evaluation pass for fold-level preds/labels
+            # Final fold evaluation (LOOCV test)
             model.eval()
             fold_preds, fold_gt = [], []
             with torch.no_grad():
-                for batch_tf, batch_bis, batch_labels in test_loader:
+                for batch_tf, batch_bis, batch_labels in validation_loader:
                     batch_tf, batch_bis, batch_labels = (
                         batch_tf.to(device),
                         batch_bis.to(device),
@@ -240,9 +247,9 @@ def main():
             all_labels.extend(fold_gt)
 
             patient_train_losses = train_losses
-            patient_val_losses = val_losses
+            patient_validation_losses = validation_losses
             patient_train_accuracies = train_accuracies
-            patient_val_accuracies = val_accuracies
+            patient_validation_accuracies = validation_accuracies
 
         training_accuracy = round(np.mean(patient_train_accuracies), 4)
 
@@ -287,7 +294,7 @@ def main():
             PatientTrainLoss(
                 patient_id,
                 patient_train_losses,
-                patient_val_losses,
+                patient_validation_losses,
                 all_preds,
                 all_labels,
                 timestamp,
@@ -297,7 +304,7 @@ def main():
             PatientTrainAccuracy(
                 patient_id,
                 patient_train_accuracies,
-                patient_val_accuracies,
+                patient_validation_accuracies,
                 timestamp,
             )
         )

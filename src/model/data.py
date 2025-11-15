@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader, Dataset, TensorDataset
 from src.config import DataLoaderConfig, Trainconfig
 from src.logger import setup_logger
 from src.preprocessing.data_transformation import normalize_to_imagenet
+from src.utils import seed_worker
 
 logger = setup_logger(name="data")
 
@@ -189,7 +190,9 @@ def get_loocv_fold(
 
     # We then combine back both preictals and interictals into a single tensor
     train_mask = torch.cat([preictal_train, interictal_train])
-    test_mask = torch.cat([preictal_splits[fold_idx], interictal_splits[fold_idx]])
+    validation_mask = torch.cat(
+        [preictal_splits[fold_idx], interictal_splits[fold_idx]]
+    )
 
     # After combining the preictals and interictals, we get the time-frequency features,
     # bispectrum features, and the labels
@@ -197,20 +200,24 @@ def get_loocv_fold(
     bis_train = bis_features[train_mask]
     labels_train = labels[train_mask]
 
-    tf_test = tf_features[test_mask]
-    bis_test = bis_features[test_mask]
-    labels_test = labels[test_mask]
+    tf_validation = tf_features[validation_mask]
+    bis_validation = bis_features[validation_mask]
+    labels_validation = labels[validation_mask]
 
     logger.info(
         f"""Normalization stats:
     TF Train: min={tf_train.min():.4f}, max={tf_train.max():.4f}, mean={tf_train.mean():.4f}, std={tf_train.std():.4f}
     BIS Train: min={bis_train.min():.4f}, max={bis_train.max():.4f}, mean={bis_train.mean():.4f}, std={bis_train.std():.4f}
-    TF Test:  min={tf_test.min():.4f},  max={tf_test.max():.4f},  mean={tf_test.mean():.4f},  std={tf_test.std():.4f}
-    BIS Test: min={bis_test.min():.4f}, max={bis_test.max():.4f}, mean={bis_test.mean():.4f}, std={bis_test.std():.4f}
+    TF Validation:  min={tf_validation.min():.4f},  max={tf_validation.max():.4f},  mean={tf_validation.mean():.4f},  std={tf_validation.std():.4f}
+    BIS Validation: min={bis_validation.min():.4f}, max={bis_validation.max():.4f}, mean={bis_validation.mean():.4f}, std={bis_validation.std():.4f}
     """
     )
 
-    return (tf_train, bis_train, labels_train), (tf_test, bis_test, labels_test)
+    return (tf_train, bis_train, labels_train), (
+        tf_validation,
+        bis_validation,
+        labels_validation,
+    )
 
 
 def get_data_loaders(
@@ -219,12 +226,17 @@ def get_data_loaders(
     batch_size: int = 32,
     pin_memory: bool = True,
 ) -> tuple[DataLoader, DataLoader]:
+    g = torch.Generator()
+    g.manual_seed(0)
+
     train_loader = DataLoader(
         train_set,
         batch_size=batch_size,
         shuffle=True,
         num_workers=DataLoaderConfig.num_workers,
         pin_memory=pin_memory,
+        worker_init_fn=seed_worker,
+        generator=g,
     )
 
     test_loader = DataLoader(
@@ -233,6 +245,8 @@ def get_data_loaders(
         shuffle=False,
         num_workers=DataLoaderConfig.num_workers,
         pin_memory=pin_memory,
+        worker_init_fn=seed_worker,
+        generator=g,
     )
 
     return train_loader, test_loader
