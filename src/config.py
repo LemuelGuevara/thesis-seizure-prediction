@@ -37,8 +37,6 @@ class PreprocessingConfig:
     low_cutoff_filter: ClassVar[float] = config["preprocessing"]["low_cutoff_filter"]
     high_cutoff_filter: ClassVar[float] = config["preprocessing"]["high_cutoff_filter"]
     notch_filter: ClassVar[float] = config["preprocessing"]["notch_filter"]
-
-    # now these are also class-level constants
     selected_channels: ClassVar[list[str]] = config["preprocessing"][
         "selected_channels"
     ]
