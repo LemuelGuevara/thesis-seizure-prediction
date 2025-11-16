@@ -5,8 +5,7 @@ from torchvision.models import EfficientNet_B0_Weights, efficientnet_b0
 from src.config import MultiSeizureModelConfig
 from src.model.classification.efficientnet import EfficientNetWithCBAM
 from src.model.fusion.attention_pooling import AttentionPooling
-from src.model.fusion.gated_fusion import GatedFusion1D
-
+from src.model.fusion.gated_fusion2D import GatedFusion2D
 
 class MultimodalSeizureModel(nn.Module):
     def __init__(
@@ -25,26 +24,19 @@ class MultimodalSeizureModel(nn.Module):
             self.tf_encoder = tf_base.features
             self.bis_encoder = bis_base.features
 
-        self.fusion = GatedFusion1D(channel_dim=feature_dim)
+        self.fusion = GatedFusion2D(channel_dim=feature_dim)
         self.attention_pool = AttentionPooling(
             in_dim=feature_dim, num_classes=num_classes
         )
 
     def forward(self, tf_input: Tensor, bis_input: Tensor) -> Tensor:
-        # Extract features (now [B, 1280, 7, 7])
+        # Extract features [B, 1280, 7, 7]
         tf_feat = self.tf_encoder(tf_input)
         bis_feat = self.bis_encoder(bis_input)
 
-        # Flatten spatial maps to [B, 1280] by averaging over H and W
-        tf_feat_flat = tf_feat.mean(dim=[2, 3])  # Global Average Pooling
-        bis_feat_flat = bis_feat.mean(dim=[2, 3])
+        # Gated fusion (preserves spatial dims)
+        fused_feat = self.fusion(tf_feat, bis_feat)  # [B, 1280, 7, 7]
 
-        # Gated fusion
-        fused_feat = self.fusion(tf_feat_flat, bis_feat_flat)  # [B, 1280]
-
-        # Reshape back to [B, 1280, 7, 7] for attention pooling
-        fused_feat = fused_feat.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, 7, 7)
-
-        # Classification
+        # Classification with attention pooling
         logits = self.attention_pool(fused_feat)
         return logits
