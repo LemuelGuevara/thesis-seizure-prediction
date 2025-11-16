@@ -208,6 +208,25 @@ def predict_from_uploaded(tf_file_obj, bis_file_obj, model_obj, device=torch.dev
 
 def main():
     with gr.Blocks(css="""
+        body, .gradio-container, #root {
+        background-color: #b9a3c4 !important;
+        }
+        .gr-column, .gr-group {
+        background: #f9f7fa !important;
+        }
+        .title-center, .authors-center {
+            text-align: center !important;
+            width: 100% !important;
+            display: flex;
+            justify-content: center;
+        }
+        .title-center .gr-markdown,
+        .authors-center .gr-markdown {
+            text-align: center !important;
+            width: 100% !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
+        }
         .inputs-row {
             display: flex;
             justify-content: center;    
@@ -248,17 +267,12 @@ def main():
         }
     """) as demo:
 
-        with gr.Row():
-            gr.Column(scale=1)
-            with gr.Column(scale=3):
-                gr.Markdown("## Seizure Prediction Using EfficientNetB0+CBAM With Gated Fusion")
-            gr.Column(scale=1)
+        with gr.Row(elem_classes="title-center"):
+            gr.Markdown("## Seizure Prediction Using EfficientNetB0+CBAM With Gated Fusion")
 
-        with gr.Row():
-            gr.Column(scale=1)
-            with gr.Column(scale=2):
-                gr.Markdown("### Dela Vega | Facturan | Guevera | Villalobos")
-            gr.Column(scale=1)
+        with gr.Row(elem_classes="authors-center"):
+            gr.Markdown("### Dela Vega | Facturan | Guevera | Villalobos")
+
 
         with gr.Row():
             gr.Column(scale=1)
