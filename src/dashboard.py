@@ -214,14 +214,16 @@ def main():
         .gr-column, .gr-group {
         background: #f9f7fa !important;
         }
-        .title-center, .authors-center {
+        .title-center, .authors-center, .model-note-center, .input-note-center {
             text-align: center !important;
             width: 100% !important;
             display: flex;
             justify-content: center;
         }
         .title-center .gr-markdown,
-        .authors-center .gr-markdown {
+        .authors-center .gr-markdown, 
+        .model-note-center .gr-markdown,
+        .input-note-center .gr-markdown {
             text-align: center !important;
             width: 100% !important;
             margin-left: auto !important;
@@ -268,11 +270,13 @@ def main():
     """) as demo:
 
         with gr.Row(elem_classes="title-center"):
-            gr.Markdown("## Seizure Prediction Using EfficientNetB0+CBAM With Gated Fusion")
+            gr.Markdown("# Seizure Prediction Using EfficientNetB0+CBAM With Gated Fusion")
 
         with gr.Row(elem_classes="authors-center"):
-            gr.Markdown("### Dela Vega | Facturan | Guevera | Villalobos")
+            gr.Markdown("## Dela Vega | Facturan | Guevera | Villalobos")
 
+        with gr.Row(elem_classes="model-note-center"):
+            gr.Markdown("#### *Note: The model expects that the uploaded test cases are of the same patient used during training.*")
 
         with gr.Row():
             gr.Column(scale=1)
@@ -282,6 +286,9 @@ def main():
                 model_state = gr.State(value=None)
                 model_upload.upload(load_model_from_upload, inputs=model_upload, outputs=[model_state, model_status])
             gr.Column(scale=1)
+
+        with gr.Row(elem_classes="input-note-center"):
+            gr.Markdown("#### *Note: Uploaded time-frequency and bispectrum files must be of the same patient and same epoch.*")
 
         with gr.Group("Input Files"):
             with gr.Row(elem_classes="inputs-row"):
