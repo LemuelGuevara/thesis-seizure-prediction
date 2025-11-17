@@ -251,6 +251,12 @@ def main():
             patient_train_accuracies = train_accuracies
             patient_validation_accuracies = validation_accuracies
 
+            # After all folds
+            torch.save(model.state_dict(), saved_models_path)
+            logger.info(
+                f"Saved best model for patient {patient_id} to {saved_models_path}"
+            )
+
         training_accuracy = round(np.mean(patient_train_accuracies), 4)
 
         accuracy = round(accuracy_score(all_labels, all_preds), 4)
