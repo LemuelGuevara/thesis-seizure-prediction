@@ -209,7 +209,7 @@ def predict_from_uploaded(tf_file_obj, bis_file_obj, model_obj, device=torch.dev
 def main():
     with gr.Blocks(css="""
         body, .gradio-container, #root {
-        background-color: #b9a3c4 !important;
+        background-color: #fbfcf8 !important;
         }
         .gr-column, .gr-group {
         background: #f9f7fa !important;
