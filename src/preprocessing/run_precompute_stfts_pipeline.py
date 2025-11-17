@@ -10,7 +10,7 @@ import os
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
-from src.config import DataConfig
+from src.config import DataConfig, PreprocessingConfig
 from src.logger import get_all_active_loggers, setup_logger
 from src.preprocessing.data_transformation import precompute_stft
 from src.utils import (
@@ -22,6 +22,7 @@ from src.utils import (
 
 from .data_cleaning import (
     apply_filters,
+    apply_ica,
     load_raw_recordings,
     parse_patient_summary_intervals,
     segment_recordings,
@@ -116,6 +117,12 @@ def main():
 
                     # 1. Filtering
                     filtered_recording = apply_filters(loaded_raw)
+                    cleaned_recording = (
+                        apply_ica(filtered_recording)
+                        if PreprocessingConfig.apply_ica
+                        else filtered_recording
+                    )
+
                     epochs_this_file = [
                         iv
                         for iv in segmented_recording_epochs
@@ -132,7 +139,7 @@ def main():
                     # Void function for precomputing the stfts, this will also instantly save these stfts
                     # on the disk
                     current_phase_counts = precompute_stft(
-                        recording=filtered_recording,
+                        recording=cleaned_recording,
                         patient_stfts_dir=patient_stfts_dir,
                         segmented_epochs=epochs_this_file,
                     )
