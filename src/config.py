@@ -48,7 +48,7 @@ class PreprocessingConfig:
     ]
     band_defs: ClassVar[dict[str, list[float]]] = config["preprocessing"]["band_defs"]
     thread_max_workers: ClassVar[int] = os.cpu_count() or 1
-    apply_ica: ClassVar[bool] = config["apply_ica"]
+    apply_ica: ClassVar[bool] = config["preprocessing"]["apply_ica"]
 
 
 @dataclass
