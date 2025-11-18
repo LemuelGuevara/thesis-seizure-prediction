@@ -3,8 +3,9 @@ name = "thesis-seizure-prediction"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = "==3.14.*"
+requires-python = "==3.13.*"
 dependencies = [
+    "gradio>=5.49.1",
     "higher-spectrum>=0.3.0",
     "jupyterlab>=4.4.9",
     "jupyterlab-vim>=4.1.4",
