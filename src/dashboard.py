@@ -123,10 +123,6 @@ def preprocess_for_model(img_np, expected_size=(224, 224), device=torch.device("
     img_np: numpy array (H,W,3) or (3,H,W)
     Returns torch tensor (1,3,H,W) on given device (float32).
     """
-    if img_np.ndim == 3 and img_np.shape[0] in (1, 3):
-        img_np = np.moveaxis(img_np, 0, -1)
-    if img_np.ndim != 3 or img_np.shape[2] != 3:
-        raise ValueError(f"Expected RGB (H,W,3), got {img_np.shape}")
     img = img_np.astype("float32")
     mean = img.mean()
     std = img.std() if img.std() > 0 else 1.0
@@ -200,7 +196,7 @@ def predict_from_uploaded(tf_file_obj, bis_file_obj, model_obj, device=torch.dev
         conf, idx = torch.max(probs, dim=1)
         label_idx = int(idx.item())
         confidence = float(conf.item())
-        label_map = {0: "Non-pre-ictal (Non-seizure)", 1: "Pre-ictal (Seizure)"}
+        label_map = {0: "Interictal (Non-seizure)", 1: "Preictal (Seizure)"}
         label = label_map.get(label_idx, f"class_{label_idx}")
         return label, f"{confidence * 100.0:.2f}%"
     except Exception as e:
