@@ -48,7 +48,6 @@ class TrainingResults:
 
 logger = setup_logger(name="metrics_utils")
 
-# Define runs directory
 training_runs_dir = os.path.join(DataConfig.runs_dir, "training")
 os.makedirs(training_runs_dir, exist_ok=True)
 
@@ -72,7 +71,6 @@ def show_training_results(
 def plot_training_loss(patient_train_loss: PatientTrainLoss) -> None:
     plt.figure(figsize=(8, 5))
 
-    # Plot raw training and validation loss
     plt.plot(
         range(1, len(patient_train_loss.train_losses) + 1),
         patient_train_loss.train_losses,
@@ -95,7 +93,8 @@ def plot_training_loss(patient_train_loss: PatientTrainLoss) -> None:
     )
     plt.legend()
     plt.grid(False)
-    plt.xlim(0, max(len(patient_train_loss.train_losses), 30))
+    max_epochs = len(patient_train_loss.train_losses)
+    plt.xlim(1, max_epochs)
 
     patient_dir = os.path.join(setup_dir, f"patient_{patient_train_loss.patient_id}")
     os.makedirs(patient_dir, exist_ok=True)
@@ -111,7 +110,6 @@ def plot_training_loss(patient_train_loss: PatientTrainLoss) -> None:
 def plot_training_accuracy(patient_training_acc: PatientTrainAccuracy) -> None:
     plt.figure(figsize=(8, 5))
 
-    # Plot raw training and validation accuracy
     plt.plot(
         range(1, len(patient_training_acc.train_accuracies) + 1),
         patient_training_acc.train_accuracies,
@@ -134,7 +132,8 @@ def plot_training_accuracy(patient_training_acc: PatientTrainAccuracy) -> None:
     )
     plt.legend()
     plt.grid(False)
-    plt.xlim(0, max(len(patient_training_acc.train_accuracies), 30))
+    max_epochs = len(patient_training_acc.train_accuracies)
+    plt.xlim(1, max_epochs)
     plt.ylim(0, 1)
 
     patient_dir = os.path.join(setup_dir, f"patient_{patient_training_acc.patient_id}")
@@ -153,7 +152,6 @@ def plot_confusion_matrix(
 ) -> None:
     classnames = ["Interictal", "Preictal"]
 
-    # Normalize by row
     cf_matrix_normalized = (
         cf_matrix.astype("float") / cf_matrix.sum(axis=1)[:, np.newaxis]
     )
@@ -187,7 +185,6 @@ def plot_confusion_matrix(
 def export_training_results(
     field_names: list[str], training_results: list[TrainingResults]
 ):
-    # Save CSV in runs/training
     training_results_path = os.path.join(
         training_runs_dir, f"{Trainconfig.setup_name}_training_results.csv"
     )
