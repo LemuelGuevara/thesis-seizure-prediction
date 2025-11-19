@@ -75,7 +75,7 @@ def main():
         timestamp = datetime.now().strftime("%b%d_%H-%M-%S")
 
         saved_models_path = os.path.join(
-            os.path.dirname(__file__), "saved_models", f"patient_{patient_id}.pt"
+            DataConfig.runs_dir, "saved_models", f"patient_{patient_id}.pt"
         )
         os.makedirs(os.path.dirname(saved_models_path), exist_ok=True)
 
