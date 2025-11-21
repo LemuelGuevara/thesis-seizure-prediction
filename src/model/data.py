@@ -8,7 +8,6 @@ from torch.utils.data import DataLoader, Dataset, TensorDataset
 from src.config import DataLoaderConfig, Trainconfig
 from src.logger import setup_logger
 from src.preprocessing.data_transformation import normalize_to_imagenet
-from src.utils import seed_worker
 
 logger = setup_logger(name="data")
 
@@ -226,17 +225,12 @@ def get_data_loaders(
     batch_size: int = 32,
     pin_memory: bool = True,
 ) -> tuple[DataLoader, DataLoader]:
-    g = torch.Generator()
-    g.manual_seed(0)
-
     train_loader = DataLoader(
         train_set,
         batch_size=batch_size,
         shuffle=True,
         num_workers=DataLoaderConfig.num_workers,
         pin_memory=pin_memory,
-        worker_init_fn=seed_worker,
-        generator=g,
     )
 
     test_loader = DataLoader(
@@ -245,8 +239,6 @@ def get_data_loaders(
         shuffle=False,
         num_workers=DataLoaderConfig.num_workers,
         pin_memory=pin_memory,
-        worker_init_fn=seed_worker,
-        generator=g,
     )
 
     return train_loader, test_loader
