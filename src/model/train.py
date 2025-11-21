@@ -26,7 +26,6 @@ from src.model.metrics_utils import (
     PatientTrainAccuracy,
     PatientTrainLoss,
     TrainingResults,
-    compute_train_accuracy,
     export_training_results,
     plot_confusion_matrix,
     plot_training_accuracy,
@@ -111,9 +110,12 @@ def main():
         patient_train_losses, patient_validation_losses = [], []
         patient_train_accuracies, patient_validation_accuracies = [], []
 
-        for fold_idx in tqdm(range(n_folds), desc="Seizure folds"):
+        for fold_idx in tqdm(range(1), desc="Seizure folds"):
             train_losses, validation_losses = [], []
             train_accuracies, validation_accuracies = [], []
+
+            train_recalls, validation_recalls = [], []
+            train_f1s, validation_f1s = [], []
 
             # LOSO Fold features
             (
@@ -155,6 +157,9 @@ def main():
                 train_loss_sum = 0.0
                 train_acc_sum = 0.0
 
+                epoch_train_preds = []
+                epoch_train_labels = []
+
                 for batch_tf, batch_bis, batch_labels in tqdm(
                     train_loader,
                     desc=f"Train Batches (Patient {patient_id}, Fold {fold_idx + 1}, Modalities: {Trainconfig.modalities})",
@@ -174,14 +179,26 @@ def main():
                     optimizer.step()
 
                     train_loss_sum += loss.item()
-                    train_acc_sum += compute_train_accuracy(outputs, batch_labels)
+
+                    preds = torch.argmax(outputs, dim=1)
+                    epoch_train_preds.extend(preds.cpu().numpy())
+                    epoch_train_labels.extend(batch_labels.cpu().numpy())
 
                 average_train_loss = train_loss_sum / len(train_loader)
-                average_train_accuracy = train_acc_sum / len(train_loader)
+
+                epoch_train_accuracy = accuracy_score(
+                    epoch_train_labels, epoch_train_preds
+                )
+                epoch_train_recall = recall_score(
+                    epoch_train_labels, epoch_train_preds, zero_division=0
+                )
+                epoch_train_f1 = f1_score(
+                    epoch_train_labels, epoch_train_preds, zero_division=0
+                )
 
                 validation_loss_sum = 0.0
-                validation_correct = 0
-                validation_total = 0
+                epoch_validation_preds = []
+                epoch_validation_labels = []
 
                 model.eval()
                 with torch.no_grad():
@@ -196,26 +213,36 @@ def main():
                         preds = torch.argmax(outputs, dim=1)
 
                         validation_loss_sum += loss.item()
-                        validation_correct += (preds == batch_labels).sum().item()
-                        validation_total += batch_labels.size(0)
+                        preds = torch.argmax(outputs, dim=1)
+                        epoch_validation_preds.extend(preds.cpu().numpy())
+                        epoch_validation_labels.extend(batch_labels.cpu().numpy())
 
                 average_validation_loss = validation_loss_sum / len(validation_loader)
-                average_validation_accuracy = validation_correct / max(
-                    1, validation_total
+
+                epoch_validation_acc = accuracy_score(
+                    epoch_validation_labels, epoch_validation_preds
+                )
+                epoch_validation_recall = recall_score(
+                    epoch_validation_labels, epoch_validation_preds, zero_division=0
+                )
+                epoch_validation_f1 = f1_score(
+                    epoch_validation_labels, epoch_validation_preds, zero_division=0
                 )
 
                 train_losses.append(average_train_loss)
-                train_accuracies.append(average_train_accuracy)
+                train_accuracies.append(epoch_train_accuracy)
+                train_recalls.append(epoch_train_recall)
+                train_f1s.append(epoch_train_f1)
+
                 validation_losses.append(average_validation_loss)
-                validation_accuracies.append(average_validation_accuracy)
+                validation_accuracies.append(epoch_validation_acc)
+                validation_recalls.append(epoch_validation_recall)
+                validation_f1s.append(epoch_validation_f1)
 
                 logger.info(
-                    f"[Patient {patient_id} | Fold {fold_idx + 1}] "
-                    f"Epoch {epoch + 1}/{Trainconfig.num_epochs} - "
-                    f"Train Loss: {average_train_loss:.4f} | "
-                    f"Train Acc: {average_train_accuracy * 100:.2f}% | "
-                    f"Val Loss: {average_validation_loss:.4f} | "
-                    f"Val Acc: {average_validation_accuracy * 100:.2f}%"
+                    f"[Patient {patient_id} | Fold {fold_idx + 1}] Epoch {epoch + 1}/{Trainconfig.num_epochs}\033[K\n"
+                    f"   Train      | Loss: {average_train_loss:.4f} | Accuracy: {epoch_train_accuracy:.4f} | Recall: {epoch_train_recall:.4f} | F1: {epoch_train_f1:.4f}\033[K\n"
+                    f"   Validation | Loss: {average_validation_loss:.4f} | Accuracy: {epoch_validation_acc:.4f} | Recall: {epoch_validation_recall:.4f} | F1: {epoch_validation_f1:.4f}\033[K"
                 )
 
                 early_stopping(average_validation_loss, model)
@@ -249,7 +276,13 @@ def main():
             patient_train_losses = train_losses
             patient_validation_losses = validation_losses
             patient_train_accuracies = train_accuracies
+
+            patient_train_recalls = train_recalls
+            patient_train_f1s = train_f1s
+
             patient_validation_accuracies = validation_accuracies
+            patient_validation_recalls = validation_recalls
+            patient_validation_f1s = validation_f1s
 
             # After all folds
             torch.save(model.state_dict(), saved_models_path)
@@ -258,6 +291,8 @@ def main():
             )
 
         training_accuracy = round(np.mean(patient_train_accuracies), 4)
+        training_recall = round(np.mean(patient_train_recalls), 4)
+        training_f1 = round(np.mean(patient_train_f1s), 4)
 
         accuracy = round(accuracy_score(all_labels, all_preds), 4)
         recall = round(recall_score(all_labels, all_preds), 4)
@@ -276,6 +311,8 @@ def main():
             "true_negatives",
             "false_negatives",
             "training_accuracy",
+            "training_recall",
+            "training_f1",
             "accuracy",
             "recall",
             "f1_score",
@@ -290,6 +327,8 @@ def main():
             TN,
             FN,
             training_accuracy,
+            training_recall,
+            training_f1,
             accuracy,
             recall,
             f1,
@@ -329,6 +368,8 @@ def main():
             "true_negatives",
             "false_negatives",
             "training_accuracy",
+            "training_recall",
+            "training_f1",
             "accuracy",
             "recall",
             "f1_score",

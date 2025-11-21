@@ -41,6 +41,8 @@ class TrainingResults:
     true_negatives: int
     false_negatives: int
     training_accuracy: float
+    training_recall: float
+    training_f1: float
     accuracy: float
     recall: float
     f1_score: float
@@ -58,14 +60,21 @@ os.makedirs(setup_dir, exist_ok=True)
 def show_training_results(
     field_names: list[str], training_results: list[TrainingResults]
 ) -> None:
-    table = PrettyTable()
-    table.field_names = field_names
-    table.title = "Patient Training Results"
+    table_counts = PrettyTable()
+    table_counts.field_names = field_names[:7]
+
+    table_metrics = PrettyTable()
+    table_metrics.field_names = [field_names[0]] + field_names[7:]
 
     for result in training_results:
-        table.add_row(list(asdict(result).values()))
+        vals = list(asdict(result).values())
+        table_counts.add_row(vals[:7])
+        table_metrics.add_row([vals[0]] + vals[7:])
 
-    print(f"\n{table}")
+    print("\n--- Setup and Confusion Matrix ---")
+    print(table_counts)
+    print("\n--- Metrics ---")
+    print(table_metrics)
 
 
 def plot_training_loss(patient_train_loss: PatientTrainLoss) -> None:
