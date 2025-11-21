@@ -110,7 +110,7 @@ def main():
         patient_train_losses, patient_validation_losses = [], []
         patient_train_accuracies, patient_validation_accuracies = [], []
 
-        for fold_idx in tqdm(range(1), desc="Seizure folds"):
+        for fold_idx in tqdm(range(n_folds), desc="Seizure folds"):
             train_losses, validation_losses = [], []
             train_accuracies, validation_accuracies = [], []
 
