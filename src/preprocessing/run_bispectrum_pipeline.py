@@ -99,16 +99,9 @@ def main():
                     )
 
             logger.info(
-                f"Finished building time-frequency mosaics for patient {patient_id}"
+                f"Finished building bispectrum npz files for patient {patient_id}"
             )
             logger.info(f"Results saved in: {patient_bispectrum_dir}")
-
-            os.makedirs(DataConfig.runs_dir, exist_ok=True)
-
-            precomputed_tf_summary_path = os.path.join(
-                DataConfig.runs_dir, "precomputed_bis.csv"
-            )
-            fieldnames = ["patient_id", "mosaics"]
 
 
 if __name__ == "__main__":

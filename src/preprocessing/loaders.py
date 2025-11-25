@@ -7,9 +7,57 @@ modules.
 
 import os
 
+import mne
 import numpy as np
+from mne.io import BaseRaw
+from tqdm import tqdm
 
+from src.config import DataConfig, PreprocessingConfig
 from src.datatypes import StftData
+from src.logger import setup_logger
+
+logger = setup_logger(name="loaders")
+
+
+def load_raw_recordings(patient_id: str, file_names: list[str]) -> list[BaseRaw]:
+    """
+    Loads all raw EDF recordings of a patient without filtering.
+
+    Args:
+        patient_id (str): Zero-padded patient ID (e.g. "01").
+
+    Returns:
+        list[BaseRaw]: List of unprocessed raw recordings.
+    """
+
+    logger.info(f"Loading EDF files for patient {patient_id}")
+    patient_folder = os.path.join(DataConfig.dataset_path, f"chb{patient_id}")
+    raw_edf_list: list[BaseRaw] = []
+
+    # Load EDF files
+    for file_name in tqdm(
+        file_names, desc=f"Reading EDF files for patient {patient_id}"
+    ):
+        recording_path = os.path.join(patient_folder, file_name)
+        logger.info(f"Reading file: {file_name}")
+
+        raw_edf = mne.io.read_raw_edf(recording_path, preload=False, verbose="error")
+        raw_channels = set(raw_edf.ch_names)
+        selected_channels = set(PreprocessingConfig.selected_channels)
+
+        # Only append if all selected channels are present
+        if selected_channels.issubset(raw_channels):
+            raw_edf.pick(PreprocessingConfig.selected_channels)
+            raw_edf_list.append(raw_edf)
+        else:
+            logger.warning(
+                f"Skipping {file_name}: missing channels {selected_channels - raw_channels}"
+            )
+
+    if not raw_edf_list:
+        raise FileNotFoundError(f"No EDF files found in {patient_folder}")
+
+    return raw_edf_list
 
 
 def load_precomputed_stfts(patient_stfts_dir: str) -> list[StftData]:

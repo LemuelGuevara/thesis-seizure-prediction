@@ -13,6 +13,7 @@ from tqdm.contrib.logging import logging_redirect_tqdm
 from src.config import DataConfig, PreprocessingConfig
 from src.logger import get_all_active_loggers, setup_logger
 from src.preprocessing.data_transformation import precompute_stft
+from src.preprocessing.loaders import load_raw_recordings
 from src.utils import (
     export_to_csv,
     is_precomputed_data_exists,
@@ -23,7 +24,6 @@ from src.utils import (
 from .data_cleaning import (
     apply_filters,
     apply_ica,
-    load_raw_recordings,
     parse_patient_summary_intervals,
     segment_recordings,
 )

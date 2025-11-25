@@ -25,7 +25,14 @@ def epoch_key(filename: str) -> str:
     Example:
         'preictal_chb02_16+_002282_002312_tf.npz' → 'preictal_chb02_16+_002282_002312'
         'interictal_chb02_02_003075_003105_tf.npz' → 'interictal_chb02_02_003075_003105'
+
+    Args:
+        filename(str): Name of the npz file
+
+    Returns:
+        str: Epoch key of the npz file
     """
+
     stem = Path(filename).stem  # drops .npz
     parts = stem.split("_")
 
@@ -110,14 +117,33 @@ class PairedEEGDataset(Dataset):
 
 def get_loocv_fold(
     dataset: PairedEEGDataset,
-    n_chunks: int,
+    samples_per_chunk: int,
     n_folds: int,
     fold_idx: int,
-    undersample: bool = True,
 ) -> tuple[
     tuple[torch.Tensor, torch.Tensor, torch.Tensor],
     tuple[torch.Tensor, torch.Tensor, torch.Tensor],
 ]:
+    """
+    Gets the loocv fold based on the current fold index. Each fold would contain the
+    preictal and interictal features with their corresponding features (e.g. tf and bis).
+    The samples then are split into chunks wherein samples_per_chunk is the number of samples in a
+    single chunk.
+
+    Args:
+        dataset(PairedEEGDataset: Custom dataset for the paired EEG features
+        samples_per_chunk(int): The number of samples per chunk to be used with torch.split
+        n_folds(int): The number of folds (NOTE: the number of folds should be equal to the numnber
+            of created splits with torch.split)
+        fold_idx(int): The index of the current fold in the training loop
+
+    Returns:
+        tuple[
+            tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+            tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+        ]: The train splits and validation splits (also acting as the test splits)
+    """
+
     logger.info(f"Leaving out fold {fold_idx}")
 
     tf_features = dataset.tf_features
@@ -171,8 +197,8 @@ def get_loocv_fold(
         f"Preictal indices count: {len(preictal_idx)}, interictal indices count: {len(interictal_idx)}"
     )
 
-    preictal_splits = torch.split(preictal_idx, n_chunks)
-    interictal_splits = torch.split(interictal_idx, n_chunks)
+    preictal_splits = torch.split(preictal_idx, samples_per_chunk)
+    interictal_splits = torch.split(interictal_idx, samples_per_chunk)
 
     assert len(preictal_splits) == len(interictal_splits), "Classes must split evenly"
     assert 0 <= fold_idx < n_folds, "fold_idx exceeds available folds"
@@ -223,14 +249,25 @@ def get_data_loaders(
     train_set: TensorDataset,
     test_set: TensorDataset,
     batch_size: int = 32,
-    pin_memory: bool = True,
 ) -> tuple[DataLoader, DataLoader]:
+    """
+    Gets the data loaders of the training and testing/validation datasets
+
+    Args:
+        train_set(TensorDataset): Training samples
+        test_set(TensorDataset): Testing/validation samples
+        batch_size(int, 32): The number of samples processed together in a single forward/backward pass
+
+    Returns:
+        tuple[DataLoader, DataLoader]: The training and testing/validation loaders
+    """
+
     train_loader = DataLoader(
         train_set,
         batch_size=batch_size,
         shuffle=True,
         num_workers=DataLoaderConfig.num_workers,
-        pin_memory=pin_memory,
+        pin_memory=True,
     )
 
     test_loader = DataLoader(
@@ -238,7 +275,7 @@ def get_data_loaders(
         batch_size=batch_size,
         shuffle=False,
         num_workers=DataLoaderConfig.num_workers,
-        pin_memory=pin_memory,
+        pin_memory=True,
     )
 
     return train_loader, test_loader

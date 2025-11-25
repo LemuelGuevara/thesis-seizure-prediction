@@ -22,7 +22,7 @@ from tqdm import tqdm
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/../")
 
-from src.config import DataConfig, PreprocessingConfig
+from src.config import PreprocessingConfig
 from src.datatypes import IntervalMeta, RecordingFileInfo
 from src.logger import setup_logger
 from src.utils import parse_time_str
@@ -155,49 +155,6 @@ def parse_patient_summary_intervals(patient_summary: typing.TextIO):
     )
 
 
-# 1. Loads all EDF recordings of a patient (since we have multiple recordings per patient)
-def load_raw_recordings(patient_id: str, file_names: list[str]) -> list[BaseRaw]:
-    """
-    Loads all raw EDF recordings of a patient without filtering.
-
-    Args:
-        patient_id (str): Zero-padded patient ID (e.g. "01").
-
-    Returns:
-        list[BaseRaw]: List of unprocessed raw recordings.
-    """
-
-    logger.info(f"Loading EDF files for patient {patient_id}")
-    patient_folder = os.path.join(DataConfig.dataset_path, f"chb{patient_id}")
-    raw_edf_list: list[BaseRaw] = []
-
-    # Load EDF files
-    for file_name in tqdm(
-        file_names, desc=f"Reading EDF files for patient {patient_id}"
-    ):
-        recording_path = os.path.join(patient_folder, file_name)
-        logger.info(f"Reading file: {file_name}")
-
-        raw_edf = mne.io.read_raw_edf(recording_path, preload=False, verbose="error")
-        raw_channels = set(raw_edf.ch_names)
-        selected_channels = set(PreprocessingConfig.selected_channels)
-
-        # Only append if all selected channels are present
-        if selected_channels.issubset(raw_channels):
-            raw_edf.pick(PreprocessingConfig.selected_channels)
-            raw_edf_list.append(raw_edf)
-        else:
-            logger.warning(
-                f"Skipping {file_name}: missing channels {selected_channels - raw_channels}"
-            )
-
-    if not raw_edf_list:
-        raise FileNotFoundError(f"No EDF files found in {patient_folder}")
-
-    return raw_edf_list
-
-
-# 2. Preprocessing: Filtering
 def apply_filters(
     raw: BaseRaw,
 ) -> BaseRaw:
@@ -265,7 +222,17 @@ def apply_ica(raw: BaseRaw) -> BaseRaw:
     return cleaned_raw
 
 
-def balance_epochs(epochs: list[IntervalMeta]):
+def balance_epochs(epochs: list[IntervalMeta]) -> list[IntervalMeta]:
+    """
+    Balances number of 30s segmented preictal and interical epochs
+
+    Args:
+        epcochs(list[IntervalMeta]): List of segmented epochs (combined preictal and interictal)
+
+    Returns:
+        list[IntervalMeta]: Balanced epochs
+    """
+
     logger.info("Balancing epochs (matching total interictal to total preictal)...")
 
     # Separate by phase
@@ -299,11 +266,10 @@ def balance_epochs(epochs: list[IntervalMeta]):
     return balanced
 
 
-# 3. Preprocessing: Segmentation into epochs
 def segment_recordings(
     intervals: list[IntervalMeta],
     undersampling: bool,
-    overlap: float = 0.5,  # 50% overlap
+    overlap: float = 0.5,
 ) -> list[IntervalMeta]:
     """
     Segments a seizure interval into overlapping, labeled epochs.

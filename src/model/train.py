@@ -110,7 +110,7 @@ def main():
         patient_train_losses, patient_validation_losses = [], []
         patient_train_accuracies, patient_validation_accuracies = [], []
 
-        for fold_idx in tqdm(range(n_folds), desc="Seizure folds"):
+        for fold_idx in tqdm(range(6), desc="Seizure folds"):
             train_losses, validation_losses = [], []
             train_accuracies, validation_accuracies = [], []
 
@@ -133,7 +133,6 @@ def main():
                 train_set,
                 validation_set,
                 batch_size=DataLoaderConfig.batch_size,
-                pin_memory=False,
             )
 
             unique_train, counts_train = torch.unique(labels_train, return_counts=True)

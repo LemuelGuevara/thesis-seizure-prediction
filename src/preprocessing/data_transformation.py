@@ -237,6 +237,17 @@ def precompute_stft(
     """
     Precompute STFTs for all epochs and save each epoch as a compressed .npz file.
     All channels are saved in a single file per epoch.
+
+    Args:
+        recording (BaseRaw): MNE Raw recording containing EEG data
+        patient_stfts_dir (str): Directory where STFT .npz files will be saved
+        segmented_epochs (list[IntervalMeta]): List of segmented EEG intervals
+        normalize_power (bool): Whether to normalize spectral power
+        normalization_method (str): Power normalization method ("minmax", etc.)
+
+    Returns:
+        dict[str, int]: A dictionary mapping each epoch phase (e.g.,
+        "preictal", "interictal") to the number of epochs processed for that phase
     """
 
     phase_counts = {}
@@ -315,7 +326,14 @@ def normalize_to_imagenet(img: np.ndarray) -> np.ndarray:
     """
     Normalize an image to ImageNet statistics in channel-first format (H, W, C).
     Converts grayscale to 3-channel if needed.
+
+    Args:
+        img(np.ndarray): Image array to be normalized
+
+    Returns:
+        np.ndarray: Normalized image array
     """
+
     if img.ndim != 3 or img.shape[-1] != 3:
         raise ValueError(f"Expected (H, W, 3), got {img.shape}")
 
@@ -330,6 +348,17 @@ def normalize_to_imagenet(img: np.ndarray) -> np.ndarray:
 
 
 def group_freqs_into_bands(magnitude: np.ndarray, freqs: np.ndarray) -> np.ndarray:
+    """
+    Groups frequency bands of an STFT by three to act as RGB channels
+
+    Args:
+        magnitude(np.ndarray): The STFT magnitude
+        freqs(np.ndarray): Frequencies of the STFT
+
+    Returns:
+        np.ndarray: Grouped frequency bands matrix
+    """
+
     eeg_bands = PreprocessingConfig.band_defs
 
     n = min(len(freqs), magnitude.shape[0])
@@ -357,6 +386,18 @@ def group_freqs_into_bands(magnitude: np.ndarray, freqs: np.ndarray) -> np.ndarr
 
 
 def create_efficientnet_img(data: np.ndarray, target_size=(224, 224)) -> np.ndarray:
+    """
+    Creates an image array for np.ndarray that will then be resized to a 224x224 for
+    EfficientNet input
+
+    Args:
+        data(np.ndarray): Image array
+        target_size(tuple): Default is 224x224
+
+    Returns:
+        np.ndarray: Resized image array
+    """
+
     logger.info(f"Data shape (before): {data.shape}")
     data = np.asarray(data, dtype=float)
 

@@ -97,7 +97,6 @@ def main():
                     for idx, stft in enumerate(loaded_stft_epochs)
                 ]
 
-                # tqdm progress bar while futures complete
                 for _ in tqdm(
                     as_completed(futures),
                     total=len(futures),
@@ -107,7 +106,7 @@ def main():
                     pass
 
             logger.info(
-                f"Finished building time-frequency mosaics for patient {patient_id}"
+                f"Finished building time-frequency npz files for patient {patient_id}"
             )
             logger.info(f"Results saved in: {patient_time_frequency_dir}")
 
