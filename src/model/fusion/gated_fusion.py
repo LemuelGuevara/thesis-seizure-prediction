@@ -8,7 +8,7 @@ from torch import Tensor
 class GatedFusion1D(nn.Module):
     def __init__(self, channel_dim: int):
         super(GatedFusion1D, self).__init__()
-        self.conv1 = nn.Conv1d(channel_dim * 2, channel_dim, kernel_size=3, padding=1)
+        self.conv1 = nn.Conv1d(channel_dim * 2, channel_dim, kernel_size=1, padding=0)
         self.relu = nn.LeakyReLU(0.2, inplace=True)
         self.conv2 = nn.Conv1d(channel_dim, channel_dim, kernel_size=1)
         self.sigmoid = nn.Sigmoid()
