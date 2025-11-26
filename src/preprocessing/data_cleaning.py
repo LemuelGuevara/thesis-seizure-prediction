@@ -131,16 +131,15 @@ def parse_patient_summary_intervals(patient_summary: typing.TextIO):
                     f"duration={duration_min:.1f} min"
                 )
 
-            if (seizure_start_sec - preictal_start_sec) >= 900:
-                preictal_intervals.append(
-                    IntervalMeta(
-                        phase="preictal",
-                        start=preictal_start_sec,
-                        end=seizure_start_sec,
-                        file_name=file_name,
-                        seizure_id=seizure_counter,
-                    )
+            preictal_intervals.append(
+                IntervalMeta(
+                    phase="preictal",
+                    start=preictal_start_sec,
+                    end=seizure_start_sec,
+                    file_name=file_name,
+                    seizure_id=seizure_counter,
                 )
+            )
 
             last_ictal_end_by_file[file_name] = end_sec
             pending_seizure_start = None
