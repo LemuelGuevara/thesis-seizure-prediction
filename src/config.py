@@ -24,9 +24,6 @@ class DataConfig:
     )
     patients_to_process: ClassVar[list[int]] = config["data"]["patients_to_process"]
     runs_dir: ClassVar[str] = config["data"]["runs_dir"]
-    non_seizure_file_reduction: ClassVar[bool] = config["data"][
-        "non_seizure_file_reduction"
-    ]
 
 
 @dataclass
@@ -43,12 +40,8 @@ class PreprocessingConfig:
     normalization_method: ClassVar[Literal["minmax", "zscore"]] = config[
         "preprocessing"
     ]["normalization_method"]
-    band_level_bispectrum: ClassVar[bool] = config["preprocessing"][
-        "band_level_bispectrum"
-    ]
     band_defs: ClassVar[dict[str, list[float]]] = config["preprocessing"]["band_defs"]
     thread_max_workers: ClassVar[int] = os.cpu_count() or 1
-    apply_ica: ClassVar[bool] = config["preprocessing"]["apply_ica"]
 
 
 @dataclass

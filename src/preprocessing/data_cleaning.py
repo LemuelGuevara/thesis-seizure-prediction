@@ -15,9 +15,7 @@ from datetime import timedelta
 from typing import cast
 
 import mne
-import numpy as np
 from mne.io import BaseRaw
-from mne.preprocessing.ica import ICA
 from tqdm import tqdm
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/../")
@@ -183,42 +181,6 @@ def apply_filters(
     )
 
     return raw
-
-
-def apply_ica(raw: BaseRaw) -> BaseRaw:
-    """
-    Applies ICA decomposition to EEG recording.
-
-    Args:
-        raw (BaseRaw): Raw EEG recording.
-
-    Returns:
-        BaseRaw: Filtered EEG recording.
-
-    """
-
-    ica = ICA(max_iter="auto")
-
-    logger.info("Applying ICA")
-
-    raw_copy = raw.copy()
-    ica.fit(raw_copy)
-
-    logger.info(
-        f"ICA fitted on: {raw_copy.n_times / raw_copy.info['sfreq']} seconds",
-    )
-
-    _, scores = ica.find_bads_muscle(raw_copy)
-
-    th = 0.20 * np.max(scores)
-    bads = np.where(scores >= th)[0]
-    logger.info(f"fBad components: {bads}")
-
-    cleaned_raw = raw.copy()
-    ica.exclude = bads
-    ica.apply(cleaned_raw)
-
-    return cleaned_raw
 
 
 def balance_epochs(epochs: list[IntervalMeta]) -> list[IntervalMeta]:
