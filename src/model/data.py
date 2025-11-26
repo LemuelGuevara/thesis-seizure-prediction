@@ -124,12 +124,10 @@ def get_loocv_fold(
     """
     Gets the loocv fold based on the current fold index. Each fold would contain the
     preictal and interictal features with their corresponding features (e.g. tf and bis).
-    The samples then are split into chunks wherein samples_per_chunk is the number of samples in a
-    single chunk.
+    Each fold would have a preictals + interictals // n_folds.
 
     Args:
         dataset(PairedEEGDataset: Custom dataset for the paired EEG features
-        samples_per_chunk(int): The number of samples per chunk to be used with torch.split
         n_folds(int): The number of folds (NOTE: the number of folds should be equal to the numnber
             of created splits with torch.split)
         fold_idx(int): The index of the current fold in the training loop
@@ -146,15 +144,6 @@ def get_loocv_fold(
     tf_features = dataset.tf_features
     bis_features = dataset.bis_features
     labels = dataset.labels
-
-    # Split features and labels into N
-    # The splitting works by splitting the entire tensor into chunks.
-    # Each tensor would have equal chunks based on n_splits
-    #
-    # Another thing to keep in mind is that N seizures is the
-    # amount of samples we have per fold so N is 5 then each fold would have around 5
-    # samples each but some may have more less depends if its its divisible, but torch.split
-    # wil handle those cases.
 
     preictal_mask = labels == 1
     interictal_mask = labels == 0
