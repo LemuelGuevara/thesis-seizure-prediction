@@ -76,9 +76,7 @@ class PairedEEGDataset(Dataset):
 
             # Normalize to imagenet specs
             tf_image = normalize_to_imagenet(tf_image)
-
-            bis_image = bis_image / 255.0
-            bis_image = (bis_image - bis_image.mean()) / (bis_image.std() + 1e-8)
+            bis_image = normalize_to_imagenet(bis_image)
 
             tf_tensor = torch.from_numpy(tf_image).permute(2, 0, 1)
             bis_tensor = torch.from_numpy(bis_image).permute(2, 0, 1)
@@ -117,7 +115,6 @@ class PairedEEGDataset(Dataset):
 
 def get_loocv_fold(
     dataset: PairedEEGDataset,
-    samples_per_chunk: int,
     n_folds: int,
     fold_idx: int,
 ) -> tuple[
@@ -174,8 +171,7 @@ def get_loocv_fold(
         )
         logger.info(f"Before undersampling interictals: {interictal_count}")
 
-        perm = torch.randperm(interictal_count)[:preictal_count]
-        interictal_idx = interictal_idx[perm]
+        interictal_idx = interictal_idx[:preictal_count]
 
         logger.info(f"After undersampling interictals: {len(interictal_idx)}")
 
@@ -197,8 +193,8 @@ def get_loocv_fold(
         f"Preictal indices count: {len(preictal_idx)}, interictal indices count: {len(interictal_idx)}"
     )
 
-    preictal_splits = torch.split(preictal_idx, samples_per_chunk)
-    interictal_splits = torch.split(interictal_idx, samples_per_chunk)
+    preictal_splits = torch.chunk(preictal_idx, n_folds)
+    interictal_splits = torch.chunk(interictal_idx, n_folds)
 
     assert len(preictal_splits) == len(interictal_splits), "Classes must split evenly"
     assert 0 <= fold_idx < n_folds, "fold_idx exceeds available folds"
