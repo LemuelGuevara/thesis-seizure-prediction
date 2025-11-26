@@ -1,4 +1,3 @@
-import math
 import os
 from datetime import datetime
 
@@ -85,24 +84,9 @@ def main():
 
         unique_seizure_ids = torch.unique(dataset.seizure_ids)
 
-        # Number of folds will be Total features / N seizures
-        # So if our total features for lets say preictal is 200 and N is 5 then
-        # 200 / 5 = 40 folds.
-        #
-        # NOTE: n_chnks and n_folds are different
-        # n_folds = The number folds for the loocv
-        # n_splits = The number of samples/chunks per fold. The number of seizures
-        # will dictate this.
-
-        n_chunks = len(unique_seizure_ids)
-
-        preictal_count = int((dataset.labels == 1).sum())
-        interictal_count = int((dataset.labels == 0).sum())
-
-        preictal_folds = math.ceil(preictal_count / n_chunks)
-        interictal_folds = math.ceil(interictal_count / n_chunks)
-
-        n_folds = min(preictal_folds, interictal_folds)
+        # Each fold is a seizure group
+        n_folds = len(unique_seizure_ids)
+        logger.info(f"Number of seizures: {n_folds}")
 
         # Patient-level accumulators
         all_preds, all_labels = [], []
@@ -121,7 +105,7 @@ def main():
             (
                 (tf_train, bis_train, labels_train),
                 (tf_validation, bis_validation, labels_validation),
-            ) = get_loocv_fold(dataset, n_chunks, n_folds, fold_idx)
+            ) = get_loocv_fold(dataset, n_folds, fold_idx)
 
             train_set = TensorDataset(tf_train, bis_train, labels_train)
             validation_set = TensorDataset(
