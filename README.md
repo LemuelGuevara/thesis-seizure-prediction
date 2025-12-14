@@ -221,6 +221,10 @@ The dashboard GUI is built with gradio and its main purpose is to do inference t
 by using the best model for each patient and using the test cases (either preictal or interictal)
 of each patient as the inputfor the model.
 
+<p align="center">
+    <img width="1727" height="968" alt="dashboard" src="https://github.com/user-attachments/assets/ca544fb0-cf90-4fcd-a6ad-3cd09c0cecf2" />
+</p>
+
 > [!NOTE]
 > Make sure to still have your precomputed data of time-frequency and bispectrum.
 
@@ -230,12 +234,11 @@ Running the dashboard:
 uv run -m src.dashboard
 ```
 
-Once the dashboard is running, open the the link in the terminal in your browser of choice. Once
-in the browser, the gui will be then shown and there will be 3 file inputs that is required. The first
-input needed is the model.pt, this file can be located in `/runs/saved_models/patient_id.pt`; this is the best model
-of the patient. Once the has been fed, the next inputs are then the time-frequency spectograms and bispectras. The files
-that will be used as inputs are the test cases, so if the test cases of the patient are 10, then the first 10 preictals or interictals
-of each modality will be used as the inputs.
+Once the dashboard is running, open the the link in the terminal in your browser of choice. Once in the browser, the gui will be then shown and there will be 3 file inputs that is required. The first input needed is the model.pt, this file can be located in `/runs/saved_models/patient_id.pt`; this is the best model of the patient. Once the has been fed, the next inputs are then the time-frequency spectograms and bispectras. The files that will be used as inputs are the test cases, so if the test cases of the patient are 10, then the first 10 preictals or interictals of each modality will be used as the inputs.
+
+<p align="center">
+    <img width="1496" height="601" alt="image" src="https://github.com/user-attachments/assets/e87f5273-87be-49b6-81a9-a55ed9e611c7" />
+</p>
 
 > [!NOTE]
 > You can only input once phase at a time, so the inputs of each modalities should match phases, no mixing of phases.
@@ -243,3 +246,7 @@ of each modality will be used as the inputs.
 > same file structure, the only difference is the modality which is indicated at the end of the filename e.g. tf or bis.
 
 Once all inputs are fed, you can now do prediction by click the predict button in the dashboard. And the inference confidence will be shown below.
+
+<p align="center">
+  <img width="739" height="307" alt="image" src="https://github.com/user-attachments/assets/e1c652cb-df34-41b6-a84e-77464a2e692f" />
+</p>
