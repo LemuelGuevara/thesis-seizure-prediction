@@ -23,7 +23,6 @@ def _path_from_gradio_file(f):
     if hasattr(f, "name"):
         return f.name
     if isinstance(f, dict):
-        # try common keys (Gradio older/newer variants)
         for key in ("name", "tmp_path", "tempfile", "file"):
             if key in f:
                 return f[key]
@@ -113,10 +112,8 @@ def load_model_from_upload(model_file_obj, device=torch.device("cpu")):
         return None, f"Unsupported model type: {filename} (expect .pt)"
 
     try:
-        # instantiate model (modify constructor args if needed)
         model = MultimodalSeizureModel(use_cbam=True)
 
-        # load only weights (state_dict); user-requested syntax included
         state = torch.load(path, map_location=device, weights_only=True)
 
         model.load_state_dict(state)
@@ -153,7 +150,7 @@ def predict_from_uploaded(
     model_obj must be the nn.Module returned by load_model_from_upload (Gradio state).
     Returns (label_str, confidence_str)
     """
-    # consistent return type: (label: str, confidence: str)
+
     if model_obj is None:
         return "No model loaded.", "0.00%"
 
@@ -188,7 +185,7 @@ def predict_from_uploaded(
     except Exception as e:
         return f"Preprocessing error: {e}", "0.00%"
 
-    model = model_obj  # already a nn.Module (from load_model_from_upload)
+    model = model_obj
     model.to(device)
     model.eval()
 
@@ -228,41 +225,40 @@ def predict_from_uploaded(
 
 def main():
     with gr.Blocks(
+        theme=gr.themes.Default(),
         css="""
-        body, .gradio-container, #root {
-        background-color: #fbfcf8 !important;
-        }
-        .gr-column, .gr-group {
-        background: #f9f7fa !important;
-        }
-        .title-center, .authors-center, .model-note-center, .input-note-center {
-            text-align: center !important;
-            width: 100% !important;
+        .title-center,
+        .authors-center,
+        .model-note-center,
+        .input-note-center {
+            text-align: center;
+            width: 100%;
             display: flex;
             justify-content: center;
         }
+
         .title-center .gr-markdown,
-        .authors-center .gr-markdown, 
+        .authors-center .gr-markdown,
         .model-note-center .gr-markdown,
         .input-note-center .gr-markdown {
-            text-align: center !important;
-            width: 100% !important;
-            margin-left: auto !important;
-            margin-right: auto !important;
+            text-align: center;
+            width: 100%;
+            margin-left: auto;
+            margin-right: auto;
         }
+
         .inputs-row {
             display: flex;
-            justify-content: center;    
-            gap: 0.5px;                  
+            justify-content: center;
+            gap: 8px;
             align-items: flex-start;
             width: 100%;
             box-sizing: border-box;
-            margin-left: 0;
-            margin-right: 0;
+            margin: 0;
         }
 
         .input-col {
-            width: 430px;             
+            width: 430px;
             padding: 10px 14px;
             box-sizing: border-box;
             display: flex;
@@ -270,25 +266,37 @@ def main():
             align-items: stretch;
         }
 
-        button, .gr-button {
-            border: 2px solid #525452 !important;
-            box-shadow: none !important;
+        button,
+        .gr-button {
+            border: 2px solid var(--border-color-primary);
+            box-shadow: none;
+            background: var(--button-primary-background-fill);
+            color: var(--button-primary-text-color);
         }
 
-        input[type="file"] + button, .gr-file-upload {
-            border-radius: 8px !important;
+        button:hover,
+        .gr-button:hover {
+            background: var(--button-primary-background-fill-hover);
         }
 
+        /* === File upload === */
+        input[type="file"] + button,
+        .gr-file-upload {
+            border-radius: 8px;
+        }
+
+        /* === Plots === */
         .gr-plot {
             max-width: 100%;
         }
 
+        /* === Predict button column === */
         .predict-col {
-            display:flex;
-            justify-content:center;
-            align-items:center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
-    """
+        """,
     ) as demo:
         with gr.Row(elem_classes="title-center"):
             gr.Markdown(
@@ -376,4 +384,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
